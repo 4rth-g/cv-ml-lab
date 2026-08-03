@@ -113,6 +113,20 @@ def log_experiment(
     conn.close()
 
 
+def _config_group_choice(group: str, fallback_target: Any) -> str:
+    """Nome do grupo de config escolhido no Hydra (ex.: 'mlp', 'mnist').
+
+    Usa o valor final resolvido, então respeita presets `+experiment=...`. Fora de
+    um run Hydra, cai no nome da classe em `fallback_target` (o `_target_`).
+    """
+    try:
+        from hydra.core.hydra_config import HydraConfig
+
+        return str(HydraConfig.get().runtime.choices[group]).lower()
+    except Exception:
+        return str(fallback_target).split(".")[-1].replace("DataModule", "").lower() or group
+
+
 def init_wandb(cfg: Any) -> Any:
     """Helper para inicializar o WandbLogger do PyTorch Lightning se disponível."""
     try:
@@ -124,10 +138,10 @@ def init_wandb(cfg: Any) -> Any:
         save_dir = cfg.logger.get("save_dir", ".")
         name = cfg.logger.get("name", None)
         if not name:
-            # Deriva do dataset + data/hora: "mnist-2026-08-02_22-05-30"
-            target = str(cfg.dataset.get("_target_", "run"))
-            ds = target.split(".")[-1].replace("DataModule", "").lower() or "run"
-            name = f"{ds}-{datetime.now():%Y-%m-%d_%H-%M-%S}"
+            # Deriva de modelo + dataset + data/hora: "mlp-mnist-2026-08-03_04-00-14"
+            model = _config_group_choice("model", cfg.model.get("_target_", "model"))
+            ds = _config_group_choice("dataset", cfg.dataset.get("_target_", "run"))
+            name = f"{model}-{ds}-{datetime.now():%Y-%m-%d_%H-%M-%S}"
         return WandbLogger(name=name, project=project, mode=mode, entity=entity, save_dir=save_dir)
     except Exception:
         return None
