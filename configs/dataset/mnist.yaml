@@ -1,0 +1,19 @@
+_target_: cvlab.data.mnist.MNISTDataModule
+data_dir: ${data_dir}
+batch_size: 64
+val_size: 10000
+in_channels: 1
+num_classes: 10
+class_names:
+  - "0"
+  - "1"
+  - "2"
+  - "3"
+  - "4"
+  - "5"
+  - "6"
+  - "7"
+  - "8"
+  - "9"
+mean: [0.1307]
+std: [0.3081]

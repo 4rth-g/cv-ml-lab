@@ -1,0 +1,13 @@
+defaults:
+  - dataset: mnist
+  - model: cnn
+  - tuning: optuna
+  - logger: wandb
+  - trainer: default
+  - _self_
+
+seed: 42
+data_dir: ${paths.root_dir}/data
+output_dir: ${paths.root_dir}/results
+paths:
+  root_dir: .

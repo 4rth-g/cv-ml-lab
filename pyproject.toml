@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cvlab"
+version = "0.1.0"
+description = "Framework dataset-agnóstico de visão computacional com tuning rigoroso (Lightning + Hydra + Optuna + W&B)"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.2.0",
+    "torchvision",
+    "lightning>=2.2.0",
+    "hydra-core>=1.3.0",
+    "omegaconf",
+    "wandb",
+    "optuna>=3.5.0",
+    "scipy",
+    "torchmetrics",
+    "numpy",
+    "matplotlib",
+]
+
+[project.scripts]
+cvlab-train = "cvlab.train:main"
+
+[dependency-groups]
+dev = [
+    "pdoc",
+    "ruff",
+    "pytest",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cvlab"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

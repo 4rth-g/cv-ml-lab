@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ccache / build outputs
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Environments
+.venv/
+.venv*/
+env/
+venv/
+
+# Data and artifacts
+data/
+wandb/
+outputs/
+results/
+*.db
+*.ckpt
+*.pth
+.hydra/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# pdoc (HTML gerado)
+docs/api/

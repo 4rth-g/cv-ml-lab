@@ -1,0 +1,11 @@
+_target_: lightning.pytorch.Trainer
+max_epochs: 10
+# Hardware: 'auto' seleciona a GPU/CPU disponível.
+# Nota Intel Arc (XPU): Lightning seleciona 'auto' (CPU/CUDA/MPS).
+# Para usar aceleração XPU em placas Intel Arc com builds PyTorch XPU,
+# configure 'accelerator: auto' ou passe 'accelerator: xpu' se suportado pela versão do Lightning.
+accelerator: auto
+devices: 1
+deterministic: false
+enable_checkpointing: true
+logger: true

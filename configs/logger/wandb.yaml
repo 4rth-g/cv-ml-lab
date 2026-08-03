@@ -1,0 +1,6 @@
+_target_: lightning.pytorch.loggers.WandbLogger
+project: cv-ml-lab
+mode: offline
+entity: grazziaarthur-universidade-federal-de-sergipe
+name: null  # null = auto (nome do dataset + timestamp); sobrescreva com logger.name=meu-run
+save_dir: ${paths.root_dir}

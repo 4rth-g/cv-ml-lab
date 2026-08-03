@@ -1,0 +1,19 @@
+_target_: cvlab.data.fashion_mnist.FashionMNISTDataModule
+data_dir: ${data_dir}
+batch_size: 64
+val_size: 10000
+in_channels: 1
+num_classes: 10
+class_names:
+  - "Camiseta/top"
+  - "Calça"
+  - "Pulôver"
+  - "Vestido"
+  - "Casaco"
+  - "Sandália"
+  - "Camisa"
+  - "Tênis"
+  - "Bolsa"
+  - "Bota"
+mean: [0.2860]
+std: [0.3530]
