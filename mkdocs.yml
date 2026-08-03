@@ -1,0 +1,61 @@
+site_name: cv-ml-lab
+site_description: Framework dataset-agnóstico de visão computacional com tuning rigoroso.
+repo_url: https://github.com/4rth-g/cv-ml-lab
+docs_dir: docs
+
+theme:
+  name: material
+  language: pt-BR
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: blue grey
+      toggle:
+        icon: material/weather-night
+        name: Modo escuro
+    - scheme: slate
+      primary: blue grey
+      accent: blue grey
+      toggle:
+        icon: material/weather-sunny
+        name: Modo claro
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            heading_level: 2
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+
+nav:
+  - Início: index.md
+  - Fluxo de trabalho: WORKFLOW.md
+  - Referência da API:
+      - Tuning (busca + comparação): reference/tuning.md
+      - Modelos: reference/models.md
+      - Dados: reference/data.md
+      - Tracking e estatística: reference/tracking.md
+      - Hardware (XPU): reference/xpu.md
+      - Treino (entrypoint): reference/train.md

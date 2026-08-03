@@ -31,5 +31,5 @@ results/
 .vscode/
 .DS_Store
 
-# pdoc (HTML gerado)
-docs/api/
+# MkDocs (site gerado)
+site/

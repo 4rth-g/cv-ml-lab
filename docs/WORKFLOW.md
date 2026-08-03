@@ -32,17 +32,20 @@ Onde o candidato validado se torna um experimento reprodutível, testado e regis
 
 ## Checklist — adicionar uma arquitetura
 
-- [ ] `src/cvlab/models/<nome>.py`: `nn.Module` (`forward` retornando logits).
-- [ ] `configs/model/<nome>.yaml` (baseline) e `configs/tuning/<nome>.yaml` (espaço de busca próprio).
+- [ ] `src/cvlab/models/<nome>.py`: `nn.Module` com `__init__(self, in_channels, num_classes, ...)` (parâmetros de arquitetura próprios) e `forward` retornando logits. Use `nn.LazyLinear` para não fixar a dimensão de entrada.
+- [ ] `configs/model/<nome>.yaml` (baseline): `_target_` do modelo + valores de arquitetura e de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`). Os valores baseline devem estar dentro do espaço de busca.
+- [ ] `configs/tuning/<nome>.yaml`: `search_space` tipado — cada chave é `{type: categorical, choices: [...]}` ou `{type: float|int, low: x, high: y, log: bool}`. Parâmetros de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`) são comuns; os demais vão ao construtor do modelo.
+- [ ] `configs/experiment/<nome>.yaml`: preset `# @package _global_` que faz `override /model` e `override /tuning` para a arquitetura, permitindo `+experiment=<nome>`.
 - [ ] `tests/test_<nome>.py`: formato do forward (in_channels 1 e 3; `num_classes` variável).
-- [ ] `cvlab-train model=<nome> dataset=<ds> ...` executa de ponta a ponta.
-- Depende da fábrica de modelos e do objective genérico (ver "Estado atual e próximos passos" no README).
+- [ ] `cvlab-train +experiment=<nome> dataset=<ds> ...` executa de ponta a ponta.
+
+A fábrica de modelos (`models/factory.py`) e o objective genérico (`suggest_params`) dispensam qualquer código específico da arquitetura no tuning: basta os quatro arquivos de configuração acima.
 
 ## Execução e tracking
 
 - Treino executado na GPU do desktop (Intel Arc B580).
 - Quando o host de treino não alcança o W&B, registrar offline (`logger.mode=offline`) e sincronizar de outra máquina (`uvx wandb sync wandb/offline-run-*`).
-- Runs nomeados `dataset-YYYY-MM-DD_HH-MM-SS`; projeto W&B `cv-ml-lab`.
+- Runs nomeados `modelo-dataset-YYYY-MM-DD_HH-MM-SS` (ex.: `mlp-mnist-...`); projeto W&B `cv-ml-lab`.
 - Estudo Optuna e tracker SQLite são artefatos de execução, ignorados pelo git e recriáveis.
 
 ## Controle de versão e publicação

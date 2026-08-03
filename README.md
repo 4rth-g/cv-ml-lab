@@ -22,7 +22,7 @@ cv-ml-lab/
 ├── configs/            # Hydra: dataset / model / tuning / logger / trainer
 ├── src/cvlab/
 │   ├── data/           # DataModules (registry, base, mnist, fashion_mnist)
-│   ├── models/         # ConfigurableCNN + LitClassifier
+│   ├── models/         # CNN, MLP e Perceptron + fábrica (factory) + LitClassifier
 │   ├── tuning/         # busca Optuna (search.py) + comparação rigorosa (rigorous.py)
 │   ├── tracking.py     # W&B, SQLite e mcnemar_test
 │   ├── xpu.py          # accelerator Intel Arc (XPU)
@@ -42,38 +42,63 @@ cv-ml-lab/
 
 ```bash
 uv sync
-# GPU Intel Arc (XPU): instalar o build XPU do PyTorch separadamente
-# uv pip install torch torchvision --index-url https://download.pytorch.org/whl/xpu
+```
+
+Para GPU Intel Arc (XPU), o PyTorch precisa ser o build `+xpu` (o padrão do PyPI é CUDA). O `uv` não troca um build já instalado que satisfaça a versão, então desinstale antes:
+
+```bash
+uv pip uninstall torch torchvision
+uv pip install --index-url https://download.pytorch.org/whl/xpu torch torchvision
+# Verificar: deve terminar em "+xpu True 1"
+uv run --no-sync python -c "import torch; print(torch.__version__, torch.xpu.is_available(), torch.xpu.device_count())"
 ```
 
 ## Uso
 
 ```bash
-# Executar o método completo em um dataset
+# Executar o método completo em um dataset (arquitetura padrão: CNN)
 uv run cvlab-train dataset=mnist
 uv run cvlab-train dataset=fashion_mnist
 
+# Escolher a arquitetura por preset (casa modelo + espaço de busca)
+uv run cvlab-train +experiment=perceptron dataset=mnist
+uv run cvlab-train +experiment=mlp dataset=fashion_mnist
+uv run cvlab-train +experiment=cnn dataset=mnist
+
 # Sobrescrever parâmetros pela linha de comando (Hydra)
-uv run cvlab-train dataset=mnist tuning.n_trials=20 trainer.max_epochs=15
+uv run cvlab-train dataset=mnist tuning.n_trials=20 tuning.final_epochs=15
 
 # Execução rápida de verificação
 uv run cvlab-train dataset=mnist tuning.n_trials=2 tuning.final_epochs=1 logger.mode=disabled
 ```
 
+Para atalhos que já embutem `uv run --no-sync` e os env vars da Arc, use o `Makefile` (ver `make help`):
+
+```bash
+make train-mlp DATASET=mnist   # treino oficial (offline)
+make smoke EXP=cnn             # verificação rápida
+make xpu                       # (re)instala o torch build +xpu
+```
+
 ## Configuração
 
-Toda a configuração fica em `configs/` (Hydra). O arquivo `configs/train.yaml` compõe as seções `dataset`, `model`, `tuning`, `logger` e `trainer`; qualquer campo pode ser sobrescrito na CLI (ex.: `dataset=fashion_mnist model.dropout_rate=0.3`). Adicionar um dataset ou uma arquitetura segue os checklists em [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+Toda a configuração fica em `configs/` (Hydra). O arquivo `configs/train.yaml` compõe as seções `dataset`, `model`, `tuning`, `logger` e `trainer`; qualquer campo pode ser sobrescrito na CLI (ex.: `dataset=fashion_mnist model.dropout_rate=0.3`).
+
+A arquitetura é escolhida por configuração, sem código específico no tuning: uma fábrica de modelos (`models/factory.py`) instancia o `_target_` do `configs/model/<arq>.yaml`, e a busca lê um `search_space` tipado (`categorical`/`float`/`int`) do `configs/tuning/<arq>.yaml`. Os presets em `configs/experiment/` casam modelo e espaço de busca (ex.: `+experiment=mlp`), evitando combinar um modelo com o espaço de busca de outro. Adicionar um dataset ou uma arquitetura segue os checklists em [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
 
 ## Documentação da API
 
-A referência da API é gerada a partir das docstrings do pacote com [pdoc](https://pdoc.dev):
+A documentação (narrativa em `docs/` + referência da API gerada das docstrings) usa
+[MkDocs](https://www.mkdocs.org/) com [Material](https://squidfunk.github.io/mkdocs-material/)
+e [mkdocstrings](https://mkdocstrings.github.io/):
 
 ```bash
-uv run pdoc cvlab              # servidor local em http://localhost:8080
-uv run pdoc cvlab -o docs/api  # HTML estático em docs/api/
+uv run mkdocs serve   # servidor local em http://127.0.0.1:8000
+uv run mkdocs build   # site estático em site/
 ```
 
-O pdoc importa o pacote para introspecção, portanto requer as dependências instaladas.
+A referência é extraída por análise estática (griffe), sem importar o pacote. As
+docstrings seguem o estilo Google.
 
 ## Resultados
 
@@ -90,12 +115,20 @@ Em ambos os casos a busca selecionou uma CNN de 3 blocos convolucionais, com dif
 
 O trainer usa `accelerator: auto`, detectando XPU (Intel Arc), CUDA, MPS ou CPU. O suporte a Intel Arc é feito por um accelerator dedicado (`src/cvlab/xpu.py`), já que o PyTorch Lightning não trata XPU nativamente. Sem GPU, a execução recai em CPU.
 
+Na Arc, use `uv run --no-sync` — como o build `+xpu` não está fixado no `pyproject`, um `uv run` normal reverteria o torch para o build CUDA. As variáveis `UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1` e `MPLBACKEND=Agg` são recomendadas para estabilidade:
+
+```bash
+UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 MPLBACKEND=Agg uv run --no-sync cvlab-train +experiment=mlp dataset=mnist logger.mode=offline
+```
+
+Quando a máquina de treino não alcança o W&B, registre offline (`logger.mode=offline`) e sincronize de outra máquina — ver [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
 ## Estado atual e próximos passos
 
-Implementado: CNN configurável (profundidade, filtros, dropout, FC); datasets MNIST e Fashion-MNIST; método rigoroso completo; tracking; testes e CI.
+Implementado: arquiteturas CNN configurável (profundidade, filtros, dropout, FC), MLP e perceptron linear, selecionáveis por configuração via fábrica de modelos e objective genérico; datasets MNIST e Fashion-MNIST; método rigoroso completo; tracking; testes e CI.
 
 Planejado:
-- Fábrica de modelos + objective genérico, para MLP, Perceptron, LeNet e ResNet apenas por configuração.
+- Novas arquiteturas (LeNet, ResNet) pelo mesmo mecanismo de configuração.
 - Backend scikit-learn (Random Forest, XGBoost) como segundo eixo de treino.
 - Dataset CIFAR-10.
 
