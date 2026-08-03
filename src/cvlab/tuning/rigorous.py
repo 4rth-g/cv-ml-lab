@@ -1,4 +1,18 @@
-"""Módulo de comparação estatística pareada e seleção na validação para o cvlab."""
+"""Comparação estatística rigorosa entre a baseline e a configuração tunada.
+
+Segunda etapa do método (a primeira é `cvlab.tuning.search`). Enquanto a
+busca escolhe uma configuração candidata olhando UMA seed num subconjunto, aqui a
+decisão é tomada com rigor:
+
+- **Retreino multi-seed** de ambas as configurações no split completo, para medir
+  variância em vez de confiar num resultado de sorte.
+- **Estatística pareada** (mesma seed nos dois modelos) para cancelar o ruído
+  seed-a-seed e ganhar poder: teste t pareado, Cohen's d_z, IC95% e McNemar.
+- **Seleção na validação**, com *fallback* para a baseline se a config tunada não
+  a superar — o teste é usado uma única vez, só para reportar.
+
+Ver `rigorous_compare`.
+"""
 
 from __future__ import annotations
 
@@ -10,7 +24,7 @@ import torch
 from scipy import stats
 
 from cvlab.data.base import BaseImageClfDataModule
-from cvlab.models.cnn import ConfigurableCNN
+from cvlab.models.factory import build_model, lit_params
 from cvlab.models.lit_module import LitClassifier
 from cvlab.tracking import mcnemar_test
 from cvlab.xpu import build_trainer
@@ -24,27 +38,40 @@ def _train_single_run(
     accelerator: str = "auto",
     pl_logger: Any = None,
 ) -> tuple[float, float, L.LightningModule, list[int], list[int]]:
-    """Treina uma rodada no split completo com restauração da melhor época (val).
+    """Treina uma vez no split completo e avalia no teste, com early stopping por validação.
 
-    Retorna: (test_acc, best_val_acc, best_model, preds, true_labels).
+    Restaura os pesos da época de melhor ``val_acc`` (via ``BestValRestoreCallback``)
+    antes de avaliar — assim o resultado reportado é o do melhor ponto segundo a
+    validação, não o da última época (que pode já estar em overfitting).
+
+    Args:
+        config: Configuração achatada com ``_target_`` + hiperparâmetros de
+            arquitetura e de treino (ver `cvlab.models.factory`).
+        seed: Semente desta rodada. No multi-seed, é o que difere entre execuções.
+        datamodule: DataModule do dataset (train/val/test).
+        epochs: Número de épocas de treino (``final_epochs``).
+        accelerator: ``"auto"``, ``"xpu"``, ``"cpu"``... repassado a ``build_trainer``.
+        pl_logger: Logger opcional do Lightning (ex.: W&B) para registrar curvas por
+            época. ``None`` desliga o logging (usado no multi-seed, que só coleta
+            métricas finais).
+
+    Returns:
+        tuple: ``(test_acc, best_val_acc, model, preds, true_labels)`` — onde
+        ``preds`` e ``true_labels`` são as predições e rótulos do conjunto de
+        teste (usados no McNemar), e ``model`` já tem os pesos da melhor época.
     """
     L.seed_everything(seed, workers=True)
     datamodule.setup("fit")
 
-    model = ConfigurableCNN(
+    model = build_model(
+        config,
         in_channels=datamodule.in_channels,
         num_classes=datamodule.num_classes,
-        num_filters=config["num_filters"],
-        dropout_rate=config["dropout_rate"],
-        fc_units=config["fc_units"],
-        n_conv_blocks=config.get("n_conv_blocks", 2),
     )
     lit_module = LitClassifier(
         model=model,
         num_classes=datamodule.num_classes,
-        lr=config["lr"],
-        optimizer=config["optimizer"],
-        weight_decay=config["weight_decay"],
+        **lit_params(config),
     )
 
     train_dl = datamodule.train_dataloader()
@@ -55,6 +82,13 @@ def _train_single_run(
     best_state: dict[str, torch.Tensor] | None = None
 
     class BestValRestoreCallback(L.Callback):
+        """Guarda uma cópia dos pesos na época de melhor val_acc (early stopping).
+
+        Não interrompe o treino; apenas mantém o melhor snapshot em CPU. Ao final,
+        `_train_single_run` recarrega esse estado, então a avaliação no teste
+        usa o melhor ponto segundo a validação — sem espiar o teste.
+        """
+
         def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
             nonlocal best_val_acc, best_state
             val_acc = float(trainer.callback_metrics.get("val_acc", 0.0))
@@ -76,7 +110,8 @@ def _train_single_run(
     if best_state is not None:
         lit_module.load_state_dict(best_state)
 
-    # Avaliação no teste com coleta de predições e rótulos
+    # Avaliação no teste. Coleta predições por exemplo (não só a acurácia) porque
+    # o McNemar precisa comparar acertos/erros exemplo a exemplo entre dois modelos.
     lit_module.eval()
     all_preds: list[int] = []
     all_targets: list[int] = []
@@ -100,10 +135,21 @@ def train_final(
     cfg: Any,
     pl_logger: Any = None,
 ) -> tuple[L.LightningModule, float, float]:
-    """Treina 1x a config final (logger opcional p/ curvas por época no W&B).
+    """Treina uma única vez a configuração já selecionada, com logger opcional.
 
-    Usado após a seleção para gerar o checkpoint final e as curvas de treino
-    (train/val por época) do modelo escolhido. Retorna (model, val_acc, test_acc).
+    Chamado após `rigorous_compare` ter decidido a configuração. Serve para
+    (a) gerar o checkpoint final e (b) registrar no W&B as curvas de treino/val por
+    época do modelo escolhido — que o multi-seed não loga (roda sem logger).
+
+    Args:
+        config: Configuração selecionada (baseline ou tunada).
+        datamodule: DataModule do dataset.
+        cfg: Config Hydra; usa ``cfg.seed``, ``cfg.tuning.final_epochs`` e
+            ``cfg.trainer.accelerator``.
+        pl_logger: Logger do Lightning (ex.: WandbLogger) ou ``None``.
+
+    Returns:
+        tuple: ``(model, val_acc, test_acc)`` do treino final.
     """
     accelerator = cfg.trainer.get("accelerator", "auto")
     test_acc, val_acc, model, _, _ = _train_single_run(
@@ -118,17 +164,43 @@ def rigorous_compare(
     datamodule: BaseImageClfDataModule,
     cfg: Any,
 ) -> dict[str, Any]:
-    """Realiza a comparação estatística rigorosa pareada entre baseline e melhor config.
+    """Compara baseline e config tunada com rigor estatístico e escolhe uma delas.
 
-    Passos do MÉTODO RIGOROSO:
-    1. Retreino multi-seed (N_SEEDS) de baseline e melhor config no split completo.
-    2. Restauração dos pesos da melhor época segundo val_acc.
-    3. Estatística PAREADA: Paired t-test, Cohen's d_z, IC95% e teste de McNemar.
-    4. Seleção garantida NA VALIDAÇÃO (best_val_mean >= baseline_val_mean).
+    Executa o núcleo do método:
+
+    1. **Retreino multi-seed**: treina baseline e tunada com as MESMAS N seeds no
+       split completo. Usar as mesmas seeds torna as amostras *pareadas* (cada seed
+       vira um par baseline/tunada sob idêntica init e ordem de dados).
+    2. **Testes pareados** sobre a acurácia de teste:
+       - *Teste t pareado* (``ttest_rel``): compara par a par, cancelando o ruído
+         comum a cada seed → mais poder que um t independente.
+       - *Cohen's d_z*: tamanho do efeito (média das diferenças / desvio das
+         diferenças); diz se a diferença é grande, além de significativa.
+       - *IC95%* da diferença média: magnitude com incerteza.
+       - *McNemar*: teste ao nível de exemplo (discordâncias no mesmo test set),
+         complementar ao t (que é ao nível de seed).
+    3. **Seleção na validação**: a tunada só é escolhida se
+       ``best_val_mean >= baseline_val_mean``; caso contrário, *fallback* para a
+       baseline. O teste nunca entra na decisão — só é reportado.
+
+    Args:
+        baseline_cfg: Configuração baseline (com ``_target_``).
+        best_cfg: Configuração tunada vinda de ``study.best_params`` (com ``_target_``).
+        datamodule: DataModule do dataset.
+        cfg: Config Hydra; usa ``cfg.tuning.n_seeds``, ``cfg.tuning.final_epochs``,
+            ``cfg.seed`` e ``cfg.trainer.accelerator``.
+
+    Returns:
+        dict: métricas agregadas (médias/desvios de val e teste por config),
+        estatísticas (``t_stat``, ``p_value``, ``cohens_d``, ``ci95_diff``,
+        ``mcnemar``), o flag ``tuned_ge_baseline`` e a escolha final
+        (``selected_name``, ``selected_config``, ``selected_model``).
     """
     n_seeds = cfg.tuning.n_seeds
     final_epochs = cfg.tuning.final_epochs
     base_seed = cfg.seed
+    # As MESMAS seeds nos dois grupos → amostras pareadas (um par baseline/tunada
+    # por seed). É isso que habilita os testes pareados mais adiante.
     seeds = [base_seed + i for i in range(n_seeds)]
     accelerator = cfg.trainer.get("accelerator", "auto")
 
@@ -165,11 +237,13 @@ def rigorous_compare(
     baseline_test_std = float(baseline_test_arr.std(ddof=1)) if n_seeds > 1 else 0.0
     best_test_std = float(best_test_arr.std(ddof=1)) if n_seeds > 1 else 0.0
 
-    # Paired t-test
+    # Teste t PAREADO sobre a acurácia de teste: opera nas diferenças por seed
+    # (best - baseline), então o ruído comum a cada seed se cancela → mais poder.
     diff_acc = best_test_arr - baseline_test_arr
     t_stat, p_value = stats.ttest_rel(best_test_arr, baseline_test_arr)
     diff_mean = float(diff_acc.mean())
     diff_std = float(diff_acc.std(ddof=1)) if n_seeds > 1 else 0.0
+    # Cohen's d_z: tamanho do efeito = média das diferenças / desvio das diferenças.
     cohens_d = diff_mean / diff_std if diff_std > 0 else 0.0
 
     # IC95% para a diferença pareada
@@ -180,7 +254,10 @@ def rigorous_compare(
     else:
         ci95 = (diff_mean, diff_mean)
 
-    # Teste de McNemar na melhor seed de validação
+    # McNemar precisa de UM modelo por lado. Escolhe-se, de cada lado, a seed de
+    # melhor VALIDAÇÃO (nunca a de melhor teste → sem vazamento). Compara acerto/erro
+    # exemplo a exemplo; mcnemar_test usa binomial exata (<25 discordâncias) ou
+    # chi2 com correção de continuidade.
     best_baseline_idx = int(np.argmax(baseline_val_arr))
     best_tuned_idx = int(np.argmax(best_val_arr))
 
@@ -190,7 +267,9 @@ def rigorous_compare(
 
     mcnemar_res = mcnemar_test(y_test_labels, preds_baseline_best_val, preds_tuned_best_val)
 
-    # Seleção estrita NA VALIDAÇÃO
+    # Seleção NA VALIDAÇÃO (nunca no teste): a tunada só vence se empatar ou superar
+    # a baseline na validação média. Senão, fallback p/ baseline — o guard-rail que
+    # impede reportar algo pior que a baseline mesmo quando a busca "achou" outra coisa.
     tuned_ge_baseline = bool(best_val_mean >= baseline_val_mean)
     if tuned_ge_baseline:
         selected_name = "melhor config (Optuna)"

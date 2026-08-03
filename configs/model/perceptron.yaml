@@ -1,0 +1,5 @@
+_target_: cvlab.models.perceptron.LinearPerceptron
+optimizer: adam
+lr: 1e-3
+weight_decay: 0.0
+batch_size: 64

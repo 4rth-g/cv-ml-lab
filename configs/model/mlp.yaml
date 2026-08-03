@@ -1,0 +1,8 @@
+_target_: cvlab.models.mlp.MLP
+hidden_units: 256
+n_layers: 2
+dropout_rate: 0.2
+optimizer: adam
+lr: 1e-3
+weight_decay: 0.0
+batch_size: 64

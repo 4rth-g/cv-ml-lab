@@ -1,7 +1,7 @@
 defaults:
   - dataset: mnist
   - model: cnn
-  - tuning: optuna
+  - tuning: cnn
   - logger: wandb
   - trainer: default
   - _self_

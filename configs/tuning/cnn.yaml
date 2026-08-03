@@ -1,0 +1,15 @@
+n_trials: 40
+epochs_gs: 10
+gs_subset_size: 20000
+n_seeds: 5
+final_epochs: 10
+
+search_space:
+  num_filters: {type: categorical, choices: [16, 32, 64, 128]}
+  dropout_rate: {type: float, low: 0.0, high: 0.6}
+  fc_units: {type: categorical, choices: [64, 128, 256, 512]}
+  n_conv_blocks: {type: categorical, choices: [2, 3]}
+  lr: {type: float, low: 1e-4, high: 5e-3, log: true}
+  batch_size: {type: categorical, choices: [32, 64, 128]}
+  optimizer: {type: categorical, choices: [adam, adamw, sgd]}
+  weight_decay: {type: float, low: 1e-6, high: 1e-2, log: true}

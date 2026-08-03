@@ -1,0 +1,5 @@
+# @package _global_
+# Preset: casa a arquitetura CNN com seu espaço de busca. Uso: +experiment=cnn
+defaults:
+  - override /model: cnn
+  - override /tuning: cnn

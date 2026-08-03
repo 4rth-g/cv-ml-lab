@@ -1,0 +1,5 @@
+# @package _global_
+# Preset: casa o MLP com seu espaço de busca. Uso: +experiment=mlp
+defaults:
+  - override /model: mlp
+  - override /tuning: mlp

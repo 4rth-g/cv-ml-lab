@@ -1,0 +1,12 @@
+n_trials: 20
+epochs_gs: 10
+gs_subset_size: 20000
+n_seeds: 5
+final_epochs: 15
+
+# O perceptron linear não tem hiperparâmetros de arquitetura; só se busca o treino.
+search_space:
+  lr: {type: float, low: 1e-4, high: 1e-2, log: true}
+  batch_size: {type: categorical, choices: [32, 64, 128]}
+  optimizer: {type: categorical, choices: [adam, adamw, sgd]}
+  weight_decay: {type: float, low: 1e-6, high: 1e-2, log: true}

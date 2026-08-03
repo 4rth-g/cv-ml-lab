@@ -1,0 +1,5 @@
+# @package _global_
+# Preset: casa o perceptron linear com seu espaço de busca. Uso: +experiment=perceptron
+defaults:
+  - override /model: perceptron
+  - override /tuning: perceptron

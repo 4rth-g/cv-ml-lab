@@ -10,6 +10,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from cvlab.data.registry import get_datamodule
+from cvlab.models.factory import baseline_params
 from cvlab.tracking import init_wandb, log_experiment
 from cvlab.tuning.rigorous import rigorous_compare, train_final
 from cvlab.tuning.search import optuna_search
@@ -37,6 +38,7 @@ def train(cfg: DictConfig) -> None:
         print("🔵 Intel XPU (Arc) detectada — accelerator='xpu'.")
 
     datamodule = get_datamodule(cfg)
+    datamodule.prepare_data()  # baixa os dados se ausentes (setup usa download=False)
     output_dir = Path(cfg.get("output_dir", "results"))
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,18 +50,10 @@ def train(cfg: DictConfig) -> None:
     for k, v in study.best_params.items():
         print(f"  {k}: {v}")
 
-    # Baseline config dict
-    baseline_cfg = {
-        "num_filters": cfg.model.num_filters,
-        "dropout_rate": float(cfg.model.dropout_rate),
-        "fc_units": cfg.model.fc_units,
-        "n_conv_blocks": cfg.model.get("n_conv_blocks", 2),
-        "lr": float(cfg.model.lr),
-        "optimizer": str(cfg.model.optimizer),
-        "weight_decay": float(cfg.model.weight_decay),
-    }
-
-    best_cfg = dict(study.best_params)
+    # Configs baseline e melhor, ambas carregando _target_ p/ a fábrica de modelos
+    model_target = str(cfg.model.get("_target_"))
+    baseline_cfg = {"_target_": model_target, **baseline_params(cfg)}
+    best_cfg = {"_target_": model_target, **dict(study.best_params)}
 
     # 2. Comparação Estatística Rigorosa
     print("\n--- 2. Comparação Estatística Rigorosa Multi-Seed ---")
