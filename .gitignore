@@ -17,10 +17,13 @@ env/
 venv/
 
 # Data and artifacts
-data/
-wandb/
-outputs/
-results/
+# Ancorados na raiz com '/': sem a barra inicial o padrão casa com QUALQUER
+# diretório de mesmo nome em qualquer profundidade — foi assim que 'data/'
+# passou a ignorar o pacote src/cvlab/data/ inteiro.
+/data/
+/wandb/
+/outputs/
+/results/
 *.db
 *.ckpt
 *.pth
@@ -32,4 +35,4 @@ results/
 .DS_Store
 
 # MkDocs (site gerado)
-site/
+/site/
