@@ -32,6 +32,7 @@ venv/
 # IDE
 .idea/
 .vscode/
+.lsp/
 .DS_Store
 
 # MkDocs (site gerado)
