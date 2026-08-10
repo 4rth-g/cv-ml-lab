@@ -30,7 +30,5 @@ def test_build_model_dispatch() -> None:
     out = model(torch.randn(2, 1, 28, 28))
     assert out.shape == (2, 10)
 
-    perceptron = build_model(
-        {"_target_": "cvlab.models.perceptron.LinearPerceptron"}, in_channels=1, num_classes=10
-    )
+    perceptron = build_model({"_target_": "cvlab.models.perceptron.LinearPerceptron"}, in_channels=1, num_classes=10)
     assert perceptron(torch.randn(2, 1, 28, 28)).shape == (2, 10)
