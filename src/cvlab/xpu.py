@@ -16,7 +16,9 @@ from lightning.pytorch.accelerators.accelerator import Accelerator
 try:
     from lightning.pytorch.accelerators import AcceleratorRegistry
 except Exception:  # pragma: no cover - variações de versão do Lightning
-    AcceleratorRegistry = None
+    # O registro é opcional: sem ele o accelerator ainda funciona via
+    # build_trainer, que instancia XPUAccelerator diretamente.
+    AcceleratorRegistry = None  # type: ignore[assignment]
 
 
 class XPUAccelerator(Accelerator):
@@ -56,7 +58,9 @@ class XPUAccelerator(Accelerator):
     def name() -> str:
         return "xpu"
 
-    def get_device_stats(self, device: str | torch.device) -> dict[str, Any]:
+    def get_device_stats(self, device: str | torch.device | int) -> dict[str, Any]:
+        # A ABC do Lightning declara device como Union[torch.device, str, int];
+        # estreitar o parâmetro aqui violaria LSP. Sem métricas de XPU por ora.
         return {}
 
 
