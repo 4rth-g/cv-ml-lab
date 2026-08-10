@@ -1,0 +1,21 @@
+_target_: cvlab.data.cifar10.CIFAR10DataModule
+data_dir: ${data_dir}
+batch_size: 64
+val_size: 5000
+# RGB + augmentation por amostra: o dataloader vira gargalo com o default 2.
+num_workers: 4
+in_channels: 3
+num_classes: 10
+class_names:
+  - "avião"
+  - "automóvel"
+  - "pássaro"
+  - "gato"
+  - "cervo"
+  - "cachorro"
+  - "sapo"
+  - "cavalo"
+  - "navio"
+  - "caminhão"
+mean: [0.4914, 0.4822, 0.4465]
+std: [0.2470, 0.2435, 0.2616]
