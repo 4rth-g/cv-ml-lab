@@ -9,28 +9,32 @@
 
 DATASET ?= mnist
 EXP     ?= cnn
+BUDGET  ?= default
 ARGS    ?=
 
 XPU_ENV := UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 MPLBACKEND=Agg
 RUN     := $(XPU_ENV) uv run --no-sync cvlab-train
 
-.PHONY: help train train-perceptron train-mlp train-cnn smoke xpu xpu-check test lint docs docs-serve sync clean
+.PHONY: help train train-perceptron train-mlp train-cnn train-cifar smoke xpu xpu-check test lint format typecheck docs docs-serve sync clean
 
 help:
 	@echo "cv-ml-lab — alvos:"
-	@echo "  make train EXP=<perceptron|mlp|cnn> DATASET=<mnist|fashion_mnist>  treino oficial (offline)"
+	@echo "  make train EXP=<perceptron|mlp|cnn> DATASET=<mnist|fashion_mnist|cifar10>  treino oficial (offline)"
 	@echo "  make train-perceptron | train-mlp | train-cnn [DATASET=...]        atalhos por arquitetura"
+	@echo "  make train-cifar [EXP=...]                                         CIFAR-10 com o budget longo"
 	@echo "  make smoke [EXP=... DATASET=...]                                   verificacao rapida (logger off)"
 	@echo "  make xpu                                                           (re)instala o torch build +xpu"
 	@echo "  make xpu-check                                                     mostra torch / xpu disponivel"
-	@echo "  make test | lint                                                  pytest / ruff"
+	@echo "  make test | lint | format                                         pytest / ruff check / ruff format"
+	@echo "  make typecheck                                                     ty (Astral) - advisory, fora do CI"
 	@echo "  make docs | docs-serve                                            build do site / servidor local (mkdocs)"
 	@echo "  make sync                                                          uvx wandb sync dos offline-runs locais"
 	@echo "  make clean                                                         remove results/ e caches"
-	@echo "  Variaveis: DATASET(=$(DATASET))  EXP(=$(EXP))  ARGS='overrides extras do Hydra'"
+	@echo "  Variaveis: DATASET(=$(DATASET))  EXP(=$(EXP))  BUDGET(=$(BUDGET))  ARGS='overrides extras do Hydra'"
+	@echo "  BUDGET: smoke | default | long (orcamento da busca, em configs/tuning/budget/)"
 
 train:
-	$(RUN) +experiment=$(EXP) dataset=$(DATASET) logger.mode=offline $(ARGS)
+	$(RUN) +experiment=$(EXP) dataset=$(DATASET) tuning/budget=$(BUDGET) logger.mode=offline $(ARGS)
 
 train-perceptron:
 	$(MAKE) train EXP=perceptron
@@ -41,8 +45,12 @@ train-mlp:
 train-cnn:
 	$(MAKE) train EXP=cnn
 
+# CIFAR-10 nao converge em 10 epocas: usa o budget longo por padrao.
+train-cifar:
+	$(MAKE) train DATASET=cifar10 BUDGET=long
+
 smoke:
-	$(RUN) +experiment=$(EXP) dataset=$(DATASET) tuning.n_trials=2 tuning.epochs_gs=1 tuning.n_seeds=2 tuning.final_epochs=1 tuning.gs_subset_size=1000 logger.mode=disabled $(ARGS)
+	$(RUN) +experiment=$(EXP) dataset=$(DATASET) tuning/budget=smoke logger.mode=disabled $(ARGS)
 
 xpu:
 	uv pip uninstall torch torchvision
@@ -57,6 +65,17 @@ test:
 
 lint:
 	uv run --no-sync ruff check src tests
+	uv run --no-sync ruff format --check .
+
+format:
+	uv run --no-sync ruff format .
+
+# Type checking com o ty (Astral). Deliberadamente FORA do CI: o ty ainda e
+# preview e boa parte dos diagnosticos vem da tipagem do proprio torch
+# (Dataset nao declara __len__), nao do codigo daqui. Use como orientacao.
+# Sai com codigo != 0 enquanto houver diagnostico - e esperado, nao e falha do alvo.
+typecheck:
+	uvx ty check --python .venv/bin/python src tests
 
 docs:
 	uv run --no-sync mkdocs build

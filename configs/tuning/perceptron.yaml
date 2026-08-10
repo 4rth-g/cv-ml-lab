@@ -1,8 +1,8 @@
-n_trials: 20
-epochs_gs: 10
-gs_subset_size: 20000
-n_seeds: 5
-final_epochs: 15
+# Espaço de busca do perceptron linear. O ORÇAMENTO da busca (n_trials, épocas,
+# seeds) vem do grupo `tuning/budget` — `tuning/budget=smoke|default|long`.
+defaults:
+  - budget: default
+  - _self_
 
 # O perceptron linear não tem hiperparâmetros de arquitetura; só se busca o treino.
 search_space:

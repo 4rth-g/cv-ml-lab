@@ -1,8 +1,8 @@
-n_trials: 40
-epochs_gs: 10
-gs_subset_size: 20000
-n_seeds: 5
-final_epochs: 10
+# Espaço de busca da CNN. O ORÇAMENTO da busca (n_trials, épocas, seeds) vem do
+# grupo `tuning/budget` — troque com `tuning/budget=smoke|default|long`.
+defaults:
+  - budget: default
+  - _self_
 
 search_space:
   num_filters: {type: categorical, choices: [16, 32, 64, 128]}

@@ -65,17 +65,21 @@ uv run cvlab-train +experiment=perceptron dataset=mnist
 uv run cvlab-train +experiment=mlp dataset=fashion_mnist
 uv run cvlab-train +experiment=cnn dataset=mnist
 
+# Escolher o orçamento da busca (n_trials, épocas, seeds) — independente da arquitetura
+uv run cvlab-train +experiment=cnn dataset=cifar10 tuning/budget=long
+
 # Sobrescrever parâmetros pela linha de comando (Hydra)
 uv run cvlab-train dataset=mnist tuning.n_trials=20 tuning.final_epochs=15
 
 # Execução rápida de verificação
-uv run cvlab-train dataset=mnist tuning.n_trials=2 tuning.final_epochs=1 logger.mode=disabled
+uv run cvlab-train dataset=mnist tuning/budget=smoke logger.mode=disabled
 ```
 
 Para atalhos que já embutem `uv run --no-sync` e os env vars da Arc, use o `Makefile` (ver `make help`):
 
 ```bash
 make train-mlp DATASET=mnist   # treino oficial (offline)
+make train-cifar               # CIFAR-10 com o orçamento longo
 make smoke EXP=cnn             # verificação rápida
 make xpu                       # (re)instala o torch build +xpu
 ```
@@ -85,6 +89,10 @@ make xpu                       # (re)instala o torch build +xpu
 Toda a configuração fica em `configs/` (Hydra). O arquivo `configs/train.yaml` compõe as seções `dataset`, `model`, `tuning`, `logger` e `trainer`; qualquer campo pode ser sobrescrito na CLI (ex.: `dataset=fashion_mnist model.dropout_rate=0.3`).
 
 A arquitetura é escolhida por configuração, sem código específico no tuning: uma fábrica de modelos (`models/factory.py`) instancia o `_target_` do `configs/model/<arq>.yaml`, e a busca lê um `search_space` tipado (`categorical`/`float`/`int`) do `configs/tuning/<arq>.yaml`. Os presets em `configs/experiment/` casam modelo e espaço de busca (ex.: `+experiment=mlp`), evitando combinar um modelo com o espaço de busca de outro. Adicionar um dataset ou uma arquitetura segue os checklists em [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
+
+O **espaço de busca** e o **orçamento** da busca são eixos separados: o primeiro é propriedade da arquitetura, o segundo do dataset e do hardware. Por isso `n_trials`, `epochs_gs`, `gs_subset_size`, `n_seeds` e `final_epochs` vivem no grupo `configs/tuning/budget/` (`smoke`, `default`, `long`) e se combinam com qualquer arquitetura: `tuning/budget=long`. Assim um dataset mais pesado como o CIFAR-10 não exige duplicar o `search_space` num arquivo novo.
+
+Na camada de dados vale o mesmo princípio: `BaseImageClfDataModule` implementa download, splits e o pipeline de transformações uma única vez, dirigido pelo atributo de classe `dataset_cls`. Um novo dataset do torchvision é uma subclasse de ~15 linhas — a classe do dataset, `mean`/`std`/`class_names` e a política de augmentation do domínio em `_augment_ops()` — mais o yaml correspondente.
 
 ## Documentação da API
 
@@ -125,12 +133,11 @@ Quando a máquina de treino não alcança o W&B, registre offline (`logger.mode=
 
 ## Estado atual e próximos passos
 
-Implementado: arquiteturas CNN configurável (profundidade, filtros, dropout, FC), MLP e perceptron linear, selecionáveis por configuração via fábrica de modelos e objective genérico; datasets MNIST e Fashion-MNIST; método rigoroso completo; tracking; testes e CI.
+Implementado: arquiteturas CNN configurável (profundidade, filtros, dropout, FC), MLP e perceptron linear, selecionáveis por configuração via fábrica de modelos e objective genérico; datasets MNIST, Fashion-MNIST e CIFAR-10; orçamento de busca como grupo reutilizável (`tuning/budget`); método rigoroso completo; tracking; testes e CI.
 
 Planejado:
 - Novas arquiteturas (LeNet, ResNet) pelo mesmo mecanismo de configuração.
 - Backend scikit-learn (Random Forest, XGBoost) como segundo eixo de treino.
-- Dataset CIFAR-10.
 
 ## Licença
 

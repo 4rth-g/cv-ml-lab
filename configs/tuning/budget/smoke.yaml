@@ -1,0 +1,8 @@
+# @package tuning
+# Orçamento mínimo: valida o pipeline ponta a ponta (Hydra -> Optuna ->
+# multi-seed -> checkpoint) em minutos. NÃO use para reportar resultados.
+n_trials: 5
+epochs_gs: 2
+gs_subset_size: 2000
+n_seeds: 2
+final_epochs: 2

@@ -1,0 +1,8 @@
+# @package tuning
+# Orçamento longo, para datasets em que 10 épocas ficam longe da convergência
+# (ex.: CIFAR-10 — 3x mais dados, RGB e bem mais difícil que MNIST/Fashion).
+n_trials: 40
+epochs_gs: 15
+gs_subset_size: 20000
+n_seeds: 5
+final_epochs: 30

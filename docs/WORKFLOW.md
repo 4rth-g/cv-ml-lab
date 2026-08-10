@@ -25,16 +25,18 @@ Onde o candidato validado se torna um experimento reprodutível, testado e regis
 
 ## Checklist — adicionar um dataset
 
-- [ ] `src/cvlab/data/<nome>.py`: `DataModule(BaseImageClfDataModule)` com `in_channels`, `num_classes`, `class_names`, `mean`, `std` e `_augment_ops()` apropriado ao domínio (por exemplo, dígitos não devem sofrer flip horizontal; roupas toleram flip).
-- [ ] `configs/dataset/<nome>.yaml`.
-- [ ] `tests/test_datamodule.py`: formatos e divisão treino/validação/teste.
-- [ ] `cvlab-train dataset=<nome> ...` executa de ponta a ponta.
+- [ ] `src/cvlab/data/<nome>.py`: `DataModule(BaseImageClfDataModule)` declarando os atributos de classe `dataset_cls` (a classe do `torchvision.datasets`), `default_in_channels`, `default_mean`, `default_std`, `default_classes` e, se necessário, `default_val_size`; mais `_augment_ops()` apropriado ao domínio (por exemplo, dígitos não devem sofrer flip horizontal; roupas e objetos naturais toleram flip). **Não** reimplemente `prepare_data`/`setup`: a base já os fornece a partir de `dataset_cls`, e é ela que garante os três splits e a augmentation só no treino.
+- [ ] `src/cvlab/data/__init__.py`: importar a classe e adicioná-la ao `__all__`.
+- [ ] `configs/dataset/<nome>.yaml`. Ajuste `num_workers` se o dataset for pesado (RGB, imagens maiores).
+- [ ] `tests/test_datamodule.py`: atributos, formatos e divisão treino/validação/teste — a lista `DATAMODULES` no topo já parametriza os testes genéricos, basta acrescentar uma linha.
+- [ ] `docs/reference/data.md`: seção `::: cvlab.data.<nome>`.
+- [ ] `cvlab-train dataset=<nome> tuning/budget=smoke ...` executa de ponta a ponta.
 
 ## Checklist — adicionar uma arquitetura
 
 - [ ] `src/cvlab/models/<nome>.py`: `nn.Module` com `__init__(self, in_channels, num_classes, ...)` (parâmetros de arquitetura próprios) e `forward` retornando logits. Use `nn.LazyLinear` para não fixar a dimensão de entrada.
 - [ ] `configs/model/<nome>.yaml` (baseline): `_target_` do modelo + valores de arquitetura e de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`). Os valores baseline devem estar dentro do espaço de busca.
-- [ ] `configs/tuning/<nome>.yaml`: `search_space` tipado — cada chave é `{type: categorical, choices: [...]}` ou `{type: float|int, low: x, high: y, log: bool}`. Parâmetros de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`) são comuns; os demais vão ao construtor do modelo.
+- [ ] `configs/tuning/<nome>.yaml`: `defaults: [budget: default, _self_]` mais o `search_space` tipado — cada chave é `{type: categorical, choices: [...]}` ou `{type: float|int, low: x, high: y, log: bool}`. Parâmetros de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`) são comuns; os demais vão ao construtor do modelo. O orçamento (`n_trials`, `epochs_gs`, `gs_subset_size`, `n_seeds`, `final_epochs`) **não** entra aqui: vem do grupo `configs/tuning/budget/`, trocável na CLI com `tuning/budget=smoke|default|long`.
 - [ ] `configs/experiment/<nome>.yaml`: preset `# @package _global_` que faz `override /model` e `override /tuning` para a arquitetura, permitindo `+experiment=<nome>`.
 - [ ] `tests/test_<nome>.py`: formato do forward (in_channels 1 e 3; `num_classes` variável).
 - [ ] `cvlab-train +experiment=<nome> dataset=<ds> ...` executa de ponta a ponta.
