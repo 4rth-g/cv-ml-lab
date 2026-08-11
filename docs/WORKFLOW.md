@@ -35,7 +35,7 @@ Onde o candidato validado se torna um experimento reprodutível, testado e regis
 ## Checklist — adicionar uma arquitetura
 
 - [ ] `src/cvlab/models/<nome>.py`: `nn.Module` com `__init__(self, in_channels, num_classes, ...)` (parâmetros de arquitetura próprios) e `forward` retornando logits. Use `nn.LazyLinear` para não fixar a dimensão de entrada.
-- [ ] `configs/model/<nome>.yaml` (baseline): `_target_` do modelo + valores de arquitetura e de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`). Os valores baseline devem estar dentro do espaço de busca.
+- [ ] `configs/model/<nome>.yaml` (baseline): `_target_` do modelo + valores de arquitetura e de treino (`lr`, `optimizer`, `weight_decay`, `scheduler`, `batch_size`). Os valores baseline devem estar dentro do espaço de busca. `scheduler` é opcional e vale `none` por omissão.
 - [ ] `configs/tuning/<nome>.yaml`: `defaults: [budget: default, _self_]` mais o `search_space` tipado — cada chave é `{type: categorical, choices: [...]}` ou `{type: float|int, low: x, high: y, log: bool}`. Parâmetros de treino (`lr`, `optimizer`, `weight_decay`, `batch_size`) são comuns; os demais vão ao construtor do modelo. O orçamento (`n_trials`, `epochs_gs`, `gs_subset_size`, `n_seeds`, `final_epochs`) **não** entra aqui: vem do grupo `configs/tuning/budget/`, trocável na CLI com `tuning/budget=smoke|default|long`.
 - [ ] `configs/experiment/<nome>.yaml`: preset `# @package _global_` que faz `override /model` e `override /tuning` para a arquitetura, permitindo `+experiment=<nome>`.
 - [ ] `tests/test_<nome>.py`: formato do forward (in_channels 1 e 3; `num_classes` variável).
