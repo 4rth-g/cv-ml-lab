@@ -9,6 +9,11 @@ Fábrica de modelos (instanciação por configuração), arquiteturas e o wrappe
 
 ## Wrapper de treino
 
+Otimizador e scheduler são escolhidos por nome, a partir das tabelas
+`OPTIMIZERS` e `SCHEDULERS`. Isso os torna hiperparâmetros de busca como
+quaisquer outros — se o cosine ajuda numa arquitetura é o método que responde,
+não uma escolha embutida no código.
+
 ::: cvlab.models.lit_module
 
 ## Arquiteturas
@@ -18,3 +23,5 @@ Fábrica de modelos (instanciação por configuração), arquiteturas e o wrappe
 ::: cvlab.models.mlp
 
 ::: cvlab.models.perceptron
+
+::: cvlab.models.resnet

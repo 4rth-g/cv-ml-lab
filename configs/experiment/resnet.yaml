@@ -1,0 +1,5 @@
+# @package _global_
+# Preset: casa a ResNet com seu espaço de busca. Uso: +experiment=resnet
+defaults:
+  - override /model: resnet
+  - override /tuning: resnet

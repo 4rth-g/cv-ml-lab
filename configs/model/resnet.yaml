@@ -1,0 +1,12 @@
+_target_: cvlab.models.resnet.ResNet
+# Profundidade = 2 * blocks_per_stage * n_stages + 2 → 14 camadas com peso.
+width: 64
+blocks_per_stage: 2
+n_stages: 3
+optimizer: sgd
+lr: 1e-2
+weight_decay: 5e-4
+# Baseline sem scheduler: mantém o piso comparável ao das outras arquiteturas.
+# Se o cosine ajudar, quem vai mostrar isso é a busca, não esta linha.
+scheduler: none
+batch_size: 128
