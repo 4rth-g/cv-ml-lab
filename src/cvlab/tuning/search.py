@@ -144,6 +144,13 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
             """
 
             def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+                # O sanity check do Lightning roda validação ANTES do treino, com
+                # current_epoch já em 0. Sem esta guarda, o passo 0 do Optuna
+                # recebia a acurácia de um modelo não treinado e a validação real
+                # da época 0 era descartada ("step 0 is already reported").
+                if trainer.sanity_checking:
+                    return
+
                 epoch = trainer.current_epoch
                 val_acc = float(trainer.callback_metrics.get("val_acc", 0.0))
                 nonlocal best_val_acc
