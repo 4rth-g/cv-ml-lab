@@ -116,8 +116,13 @@ Relatório público no Weights & Biases: [Resultados — cv-ml-lab](https://api.
 |---|---|---|---|---|---|
 | MNIST | 99,22% ± 0,09 | 99,40% ± 0,07 | +0,18 pp | t=5,19 (0,007) | 0,18 |
 | Fashion-MNIST | 90,36% ± 0,13 | 91,44% ± 0,15 | +1,08 pp | t=10,87 (0,0004) | 7×10⁻⁵ |
+| CIFAR-10 | 74,33% ± 0,38 | 85,39% ± 0,23 | +11,06 pp | t=54,92 (7×10⁻⁷) | 5×10⁻¹⁶⁴ |
 
-Em ambos os casos a busca selecionou uma CNN de 3 blocos convolucionais, com diferença significativa no teste t pareado. No MNIST, próximo do teto de acurácia (~99%), o teste de McNemar não indica diferença — ilustrando a utilidade de reportar mais de um teste.
+Nos três casos a busca selecionou uma CNN de 3 blocos convolucionais, com diferença significativa no teste t pareado. No MNIST, próximo do teto de acurácia (~99%), o teste de McNemar não indica diferença — ilustrando a utilidade de reportar mais de um teste.
+
+A magnitude do ganho acompanha a dificuldade do dataset. Em MNIST quase tudo satura perto de 99% e a busca tem pouco a recuperar; em CIFAR-10 a baseline (2 blocos, 32 filtros, 21 K parâmetros) é claramente subdimensionada, e a configuração escolhida (3 blocos, 128 filtros, `fc_units=512`, AdamW, 1,5 M parâmetros) rende +11 pp. É o caso em que a busca de arquitetura efetivamente paga — e onde o `d_z` de 24,6 diz que a diferença não é só significativa, é grande.
+
+Vale contrastar as duas etapas do método: a busca reportou 76,8% de val_acc no subconjunto de 20 k com 15 épocas, enquanto o retreino multi-seed no split completo com 30 épocas chegou a 86,0%. A métrica da busca é um proxy barato para *ordenar* configurações, não uma estimativa de desempenho — por isso a decisão final vem do multi-seed. O CIFAR-10 usou `tuning/budget=long` (~53 min numa Intel Arc B580).
 
 ## Hardware
 
