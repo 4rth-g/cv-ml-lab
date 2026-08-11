@@ -113,11 +113,15 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
             **lit_params(params),
         )
 
+        # Herda num_workers do datamodule: com num_workers=0 a busca carregava os
+        # dados numa thread só enquanto a GPU esperava — medido em ~27% do tempo
+        # de época numa Arc B580, e a busca é a fase mais longa do pipeline.
         train_dl = DataLoader(
             gs_train_dataset,
             batch_size=int(params.get("batch_size", datamodule.batch_size)),
             shuffle=True,
-            num_workers=0,
+            num_workers=datamodule.num_workers,
+            persistent_workers=datamodule.num_workers > 0,
         )
         val_dl = datamodule.val_dataloader()
 
