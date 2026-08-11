@@ -15,7 +15,7 @@ ARGS    ?=
 XPU_ENV := UR_L0_V2_FORCE_DISABLE_COPY_OFFLOAD=1 MPLBACKEND=Agg
 RUN     := $(XPU_ENV) uv run --no-sync cvlab-train
 
-.PHONY: help train train-perceptron train-mlp train-cnn train-cifar smoke xpu xpu-check test lint format typecheck docs docs-serve sync clean
+.PHONY: help train train-perceptron train-mlp train-cnn train-cifar smoke xpu xpu-check test lint format typecheck docs docs-serve sync clean clean-results
 
 help:
 	@echo "cv-ml-lab — alvos:"
@@ -29,7 +29,8 @@ help:
 	@echo "  make typecheck                                                     ty (Astral) - advisory, fora do CI"
 	@echo "  make docs | docs-serve                                            build do site / servidor local (mkdocs)"
 	@echo "  make sync                                                          uvx wandb sync dos offline-runs locais"
-	@echo "  make clean                                                         remove results/ e caches"
+	@echo "  make clean                                                         remove caches e results/_smoke"
+	@echo "  make clean-results                                                 APAGA results/ (ckpts, estudos, tracker)"
 	@echo "  Variaveis: DATASET(=$(DATASET))  EXP(=$(EXP))  BUDGET(=$(BUDGET))  ARGS='overrides extras do Hydra'"
 	@echo "  BUDGET: smoke | default | long (orcamento da busca, em configs/tuning/budget/)"
 
@@ -49,8 +50,11 @@ train-cnn:
 train-cifar:
 	$(MAKE) train DATASET=cifar10 BUDGET=long
 
+# output_dir separado NAO e detalhe: optuna_search usa load_if_exists=True, entao
+# um smoke gravando em results/ deixaria trials de orcamento smoke no estudo que o
+# run real depois retomaria - contaminando a busca e anulando a baseline enfileirada.
 smoke:
-	$(RUN) +experiment=$(EXP) dataset=$(DATASET) tuning/budget=smoke logger.mode=disabled $(ARGS)
+	$(RUN) +experiment=$(EXP) dataset=$(DATASET) tuning/budget=smoke logger.mode=disabled output_dir=results/_smoke $(ARGS)
 
 xpu:
 	uv pip uninstall torch torchvision
@@ -87,5 +91,9 @@ sync:
 	uvx wandb sync wandb/offline-run-*
 
 clean:
-	rm -rf results outputs .pytest_cache .ruff_cache
+	rm -rf results/_smoke outputs .pytest_cache .ruff_cache
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+# Cuidado: apaga checkpoints, estudos do Optuna e o experiment_tracker.db.
+clean-results:
+	rm -rf results
