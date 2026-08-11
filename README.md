@@ -124,6 +124,20 @@ A magnitude do ganho acompanha a dificuldade do dataset. Em MNIST quase tudo sat
 
 Vale contrastar as duas etapas do método: a busca reportou 76,8% de val_acc no subconjunto de 20 k com 15 épocas, enquanto o retreino multi-seed no split completo com 30 épocas chegou a 86,0%. A métrica da busca é um proxy barato para *ordenar* configurações, não uma estimativa de desempenho — por isso a decisão final vem do multi-seed. O CIFAR-10 usou `tuning/budget=long` (~53 min numa Intel Arc B580).
 
+### Arquiteturas no CIFAR-10
+
+Mesmo dataset, mesmo orçamento (`tuning/budget=long`), trocando só a arquitetura por configuração:
+
+| Arquitetura | Baseline | Tunado (Optuna) | Δ | t pareado (p) | McNemar (p) |
+|---|---|---|---|---|---|
+| Perceptron linear | 34,36% ± 0,06 | 37,30% ± 0,30 | +2,94 pp | t=20,15 (4×10⁻⁵) | 1×10⁻⁹ |
+| MLP | 43,92% ± 0,54 | 54,55% ± 0,21 | +10,63 pp | t=58,46 (5×10⁻⁷) | 1×10⁻⁸⁹ |
+| CNN | 74,33% ± 0,38 | 85,39% ± 0,23 | +11,06 pp | t=54,92 (7×10⁻⁷) | 5×10⁻¹⁶⁴ |
+
+A escada 37% → 55% → 85% é o argumento central a favor da convolução em imagem natural: achatar a imagem, como fazem o perceptron e o MLP, descarta a estrutura espacial que a CNN explora. O contraste com o MNIST é instrutivo — lá um classificador linear já passa de 90%, porque dígitos centralizados em fundo preto são quase linearmente separáveis nos próprios pixels.
+
+O ganho da busca também cresce com a capacidade do modelo (+2,94, +10,63, +11,06 pp). No perceptron linear não há arquitetura para buscar — só `lr`, `optimizer`, `weight_decay` e `batch_size` —, então o teto do tuning é baixo por construção. É o comportamento esperado, e serve de sanidade: se a busca "melhorasse" muito um modelo sem hiperparâmetros de arquitetura, algo estaria errado.
+
 ## Hardware
 
 O trainer usa `accelerator: auto`, detectando XPU (Intel Arc), CUDA, MPS ou CPU. O suporte a Intel Arc é feito por um accelerator dedicado (`src/cvlab/xpu.py`), já que o PyTorch Lightning não trata XPU nativamente. Sem GPU, a execução recai em CPU.
