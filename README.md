@@ -19,15 +19,16 @@ O fluxo de trabalho (exploração em notebooks → formalização neste reposit�
 
 ```
 cv-ml-lab/
-├── configs/            # Hydra: dataset / model / tuning / logger / trainer
+├── configs/            # Hydra: dataset / model / tuning (+ budget) / logger / trainer
 ├── src/cvlab/
-│   ├── data/           # DataModules (registry, base, mnist, fashion_mnist)
-│   ├── models/         # CNN, MLP e Perceptron + fábrica (factory) + LitClassifier
+│   ├── data/           # DataModules (base + dataset_cls: mnist, fashion_mnist, cifar10)
+│   ├── models/         # CNN, ResNet, MLP e Perceptron + factory + LitClassifier
 │   ├── tuning/         # busca Optuna (search.py) + comparação rigorosa (rigorous.py)
-│   ├── tracking.py     # W&B, SQLite e mcnemar_test
+│   ├── tracking.py     # W&B, SQLite, run_name e mcnemar_test
 │   ├── xpu.py          # accelerator Intel Arc (XPU)
 │   └── train.py        # entrypoint (cvlab-train)
-├── tests/              # pytest (forward, mcnemar, datamodule)
+├── tests/              # pytest (forward, mcnemar, datamodule, lit_module)
+├── justfile            # atalhos de treino e manutenção (`just`)
 └── docs/WORKFLOW.md
 ```
 
@@ -75,14 +76,20 @@ uv run cvlab-train dataset=mnist tuning.n_trials=20 tuning.final_epochs=15
 uv run cvlab-train dataset=mnist tuning/budget=smoke logger.mode=disabled
 ```
 
-Para atalhos que já embutem `uv run --no-sync` e os env vars da Arc, use o `Makefile` (ver `make help`):
+Para atalhos que já embutem `uv run --no-sync` e os env vars da Arc, use o [`justfile`](justfile) — `just` sem argumentos lista tudo, com os parâmetros de cada recipe:
 
 ```bash
-make train-mlp DATASET=mnist   # treino oficial (offline)
-make train-cifar               # CIFAR-10 com o orçamento longo
-make smoke EXP=cnn             # verificação rápida
-make xpu                       # (re)instala o torch build +xpu
+just train mlp mnist           # treino oficial (offline)
+just train cnn cifar10 long    # arquitetura, dataset e orçamento, posicionais
+just train-cifar               # atalho: CIFAR-10 já com o orçamento longo
+just smoke cnn                 # verificação rápida do pipeline
+just test                      # pytest
+just lint                      # os mesmos checks do CI
+just xpu                       # (re)instala o torch build +xpu (Arc)
+just cpu                       # torch CPU-only, para máquinas sem GPU Intel
 ```
+
+Overrides do Hydra podem ser passados ao final de qualquer recipe de treino: `just train cnn cifar10 long model.width=32`.
 
 ## Configuração
 
@@ -91,6 +98,8 @@ Toda a configuração fica em `configs/` (Hydra). O arquivo `configs/train.yaml`
 A arquitetura é escolhida por configuração, sem código específico no tuning: uma fábrica de modelos (`models/factory.py`) instancia o `_target_` do `configs/model/<arq>.yaml`, e a busca lê um `search_space` tipado (`categorical`/`float`/`int`) do `configs/tuning/<arq>.yaml`. Os presets em `configs/experiment/` casam modelo e espaço de busca (ex.: `+experiment=mlp`), evitando combinar um modelo com o espaço de busca de outro. Adicionar um dataset ou uma arquitetura segue os checklists em [`docs/WORKFLOW.md`](docs/WORKFLOW.md).
 
 O **espaço de busca** e o **orçamento** da busca são eixos separados: o primeiro é propriedade da arquitetura, o segundo do dataset e do hardware. Por isso `n_trials`, `epochs_gs`, `gs_subset_size`, `n_seeds` e `final_epochs` vivem no grupo `configs/tuning/budget/` (`smoke`, `default`, `long`) e se combinam com qualquer arquitetura: `tuning/budget=long`. Assim um dataset mais pesado como o CIFAR-10 não exige duplicar o `search_space` num arquivo novo.
+
+A **receita de otimização também é configuração**, não código. Otimizador e scheduler de learning rate são escolhidos por nome, a partir das tabelas `OPTIMIZERS` e `SCHEDULERS` em `models/lit_module.py`, e podem entrar no `search_space` como qualquer outro hiperparâmetro. A consequência metodológica importa mais que a comodidade: em vez de o autor decidir no fonte que "ResNet usa cosine annealing", a decisão passa pelo mesmo crivo de todo o resto — busca, retreino multi-seed e teste pareado. O default é `scheduler: none`, então arquiteturas que não declaram o campo treinam exatamente como antes.
 
 Na camada de dados vale o mesmo princípio: `BaseImageClfDataModule` implementa download, splits e o pipeline de transformações uma única vez, dirigido pelo atributo de classe `dataset_cls`. Um novo dataset do torchvision é uma subclasse de ~15 linhas — a classe do dataset, `mean`/`std`/`class_names` e a política de augmentation do domínio em `_augment_ops()` — mais o yaml correspondente.
 
@@ -152,10 +161,10 @@ Quando a máquina de treino não alcança o W&B, registre offline (`logger.mode=
 
 ## Estado atual e próximos passos
 
-Implementado: arquiteturas CNN configurável (profundidade, filtros, dropout, FC), MLP e perceptron linear, selecionáveis por configuração via fábrica de modelos e objective genérico; datasets MNIST, Fashion-MNIST e CIFAR-10; orçamento de busca como grupo reutilizável (`tuning/budget`); método rigoroso completo; tracking; testes e CI.
+Implementado: arquiteturas CNN configurável (profundidade, filtros, dropout, FC), ResNet (profundidade e largura configuráveis, com conexões residuais), MLP e perceptron linear, selecionáveis por configuração via fábrica de modelos e objective genérico; datasets MNIST, Fashion-MNIST e CIFAR-10; orçamento de busca como grupo reutilizável (`tuning/budget`); otimizador e scheduler de LR como hiperparâmetros de busca; método rigoroso completo; tracking; testes e CI.
 
 Planejado:
-- Novas arquiteturas (LeNet, ResNet) pelo mesmo mecanismo de configuração.
+- Novas arquiteturas (LeNet, DenseNet) pelo mesmo mecanismo de configuração.
 - Backend scikit-learn (Random Forest, XGBoost) como segundo eixo de treino.
 
 ## Licença
