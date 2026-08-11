@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf, open_dict
 
 from cvlab.data.registry import get_datamodule
 from cvlab.models.factory import baseline_params
-from cvlab.tracking import init_wandb, log_experiment
+from cvlab.tracking import init_wandb, log_experiment, run_name
 from cvlab.tuning.rigorous import rigorous_compare, train_final
 from cvlab.tuning.search import optuna_search
 from cvlab.xpu import XPUAccelerator
@@ -36,6 +36,14 @@ def train(cfg: DictConfig) -> None:
         with open_dict(cfg):
             cfg.trainer.accelerator = "xpu"
         print("🔵 Intel XPU (Arc) detectada — accelerator='xpu'.")
+
+    # Nome do run calculado UMA vez e fixado em cfg.logger.name: o W&B e o arquivo
+    # de checkpoint precisam da mesma string (o timestamp mudaria entre chamadas).
+    # Respeita um `logger.name=...` passado pelo usuário.
+    if not cfg.logger.get("name", None):
+        with open_dict(cfg):
+            cfg.logger.name = run_name(cfg)
+    print(f"Run:     {cfg.logger.name}")
 
     datamodule = get_datamodule(cfg)
     datamodule.prepare_data()  # baixa os dados se ausentes (setup usa download=False)
@@ -107,7 +115,11 @@ def train(cfg: DictConfig) -> None:
     )
 
     # 4. Salvar Checkpoint Final
-    checkpoint_path = output_dir / "best.ckpt"
+    # Nomeado como o run do W&B (modelo-dataset-data_hora) para os dois serem
+    # correlacionáveis; um nome fixo faria cada execução sobrescrever a anterior.
+    ckpt_dir = output_dir / "checkpoints"
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_path = ckpt_dir / f"{cfg.logger.name}.ckpt"
     selected_model: L.LightningModule = final_model
     torch.save(
         {

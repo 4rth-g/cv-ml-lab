@@ -127,6 +127,18 @@ def _config_group_choice(group: str, fallback_target: Any) -> str:
         return str(fallback_target).split(".")[-1].replace("DataModule", "").lower() or group
 
 
+def run_name(cfg: Any) -> str:
+    """Nome canônico do run: ``modelo-dataset-data_hora``.
+
+    Ex.: ``mlp-mnist-2026-08-03_04-00-14``. É a mesma string usada para nomear o
+    run no W&B e o arquivo de checkpoint, para que os dois sejam correlacionáveis
+    a olho nu — dado um `.ckpt`, você acha o run no relatório, e vice-versa.
+    """
+    model = _config_group_choice("model", cfg.model.get("_target_", "model"))
+    ds = _config_group_choice("dataset", cfg.dataset.get("_target_", "run"))
+    return f"{model}-{ds}-{datetime.now():%Y-%m-%d_%H-%M-%S}"
+
+
 def init_wandb(cfg: Any) -> Any:
     """Helper para inicializar o WandbLogger do PyTorch Lightning se disponível."""
     try:
@@ -136,12 +148,7 @@ def init_wandb(cfg: Any) -> Any:
         project = cfg.logger.get("project", "cv-ml-lab")
         entity = cfg.logger.get("entity", None)
         save_dir = cfg.logger.get("save_dir", ".")
-        name = cfg.logger.get("name", None)
-        if not name:
-            # Deriva de modelo + dataset + data/hora: "mlp-mnist-2026-08-03_04-00-14"
-            model = _config_group_choice("model", cfg.model.get("_target_", "model"))
-            ds = _config_group_choice("dataset", cfg.dataset.get("_target_", "run"))
-            name = f"{model}-{ds}-{datetime.now():%Y-%m-%d_%H-%M-%S}"
+        name = cfg.logger.get("name", None) or run_name(cfg)
         return WandbLogger(name=name, project=project, mode=mode, entity=entity, save_dir=save_dir)
     except Exception:
         return None
