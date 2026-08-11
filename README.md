@@ -135,17 +135,24 @@ Vale contrastar as duas etapas do método: a busca reportou 76,8% de val_acc no 
 
 ### Arquiteturas no CIFAR-10
 
-Mesmo dataset, mesmo orçamento (`tuning/budget=long`), trocando só a arquitetura por configuração:
+Mesmo dataset, mesmo orçamento (`tuning/budget=long`), trocando só a arquitetura por configuração — de `just train perceptron cifar10 long` a `just train resnet cifar10 long`:
 
 | Arquitetura | Baseline | Tunado (Optuna) | Δ | t pareado (p) | McNemar (p) |
 |---|---|---|---|---|---|
 | Perceptron linear | 34,36% ± 0,06 | 37,30% ± 0,30 | +2,94 pp | t=20,15 (4×10⁻⁵) | 1×10⁻⁹ |
 | MLP | 43,92% ± 0,54 | 54,55% ± 0,21 | +10,63 pp | t=58,46 (5×10⁻⁷) | 1×10⁻⁸⁹ |
 | CNN | 74,33% ± 0,38 | 85,39% ± 0,23 | +11,06 pp | t=54,92 (7×10⁻⁷) | 5×10⁻¹⁶⁴ |
+| ResNet | 89,37% ± 0,32 | 93,93% ± 0,19 | +4,56 pp | t=41,93 (2×10⁻⁶) | 2×10⁻⁵⁹ |
 
-A escada 37% → 55% → 85% é o argumento central a favor da convolução em imagem natural: achatar a imagem, como fazem o perceptron e o MLP, descarta a estrutura espacial que a CNN explora. O contraste com o MNIST é instrutivo — lá um classificador linear já passa de 90%, porque dígitos centralizados em fundo preto são quase linearmente separáveis nos próprios pixels.
+A escada 37% → 55% → 85% → 94% é o argumento central a favor das prioridades arquiteturais em imagem natural. Achatar a imagem, como fazem o perceptron e o MLP, descarta a estrutura espacial que a convolução explora; e as conexões residuais permitem aprofundar a rede sem que o gradiente se degrade. O contraste com o MNIST é instrutivo — lá um classificador linear já passa de 90%, porque dígitos centralizados em fundo preto são quase linearmente separáveis nos próprios pixels.
 
-O ganho da busca também cresce com a capacidade do modelo (+2,94, +10,63, +11,06 pp). No perceptron linear não há arquitetura para buscar — só `lr`, `optimizer`, `weight_decay` e `batch_size` —, então o teto do tuning é baixo por construção. É o comportamento esperado, e serve de sanidade: se a busca "melhorasse" muito um modelo sem hiperparâmetros de arquitetura, algo estaria errado.
+Vale notar que a **baseline** da ResNet (89,37%, sem scheduler e sem tuning) já supera a CNN **tunada** (85,39%) por 3,98 pp. A arquitetura, aqui, vale mais que a busca de hiperparâmetros.
+
+### O scheduler não foi escolhido no código
+
+A busca da ResNet selecionou `scheduler: cosine`, junto com `sgd`, 3 blocos por estágio e `lr≈3,9×10⁻³`. Isso importa metodologicamente: o cosine annealing é receita conhecida para ResNet em CIFAR, mas aqui ele **não** foi fixado no fonte — entrou como dimensão do `search_space`, e foi a busca que o escolheu, o multi-seed que confirmou o ganho e o teste pareado que o quantificou. O resultado é o mesmo que a literatura recomenda; a diferença é que ele veio com evidência própria em vez de autoridade.
+
+Os 93,93% também colocam o projeto na faixa que a literatura reporta para ResNets em CIFAR-10 (93–95%), mesmo com apenas 30 épocas de treino final — bem abaixo das 100–200 das receitas clássicas.
 
 ## Hardware
 
