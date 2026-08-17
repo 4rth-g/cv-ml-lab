@@ -1,0 +1,311 @@
+---
+title: "cv-ml-lab · relatório estatístico"
+subtitle: "inferência pós-hoc sobre os artefatos do run"
+lang: pt
+date: today
+params:
+  run_id: "latest"
+  root: null
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    toc-title: "Conteúdo"
+    embed-resources: true
+    code-fold: true
+    code-summary: "ver código"
+    fig-width: 7
+    fig-height: 4.2
+    theme: cosmo
+    tbl-cap-location: top
+
+execute:
+  warning: false
+  message: false
+  echo: false
+---
+
+```{r}
+#| include: false
+suppressMessages(devtools::load_all(here_pkg <- ".", quiet = TRUE))
+library(ggplot2)
+
+# Erro de "não há run ainda" é o caso comum ao usar o repo pela primeira vez.
+# Sem este tryCatch ele sai enterrado no backtrace do Quarto e parece falha de
+# renderização, quando é só ausência de dado.
+run <- tryCatch(
+  read_run(params$run_id, params$root),
+  error = function(e) {
+    stop(
+      "\n\n", conditionMessage(e),
+      "\n\nO relatório LÊ artefatos, não treina. Gere um run antes:\n",
+      "    just train cnn mnist        (ou: just smoke cnn mnist)\n",
+      "e então:\n",
+      "    just report-html            (ou: just report-html latest results/_smoke)\n",
+      call. = FALSE
+    )
+  }
+)
+m <- run$manifest
+paired <- paired_accuracies(run$seed_metrics, "test")
+tt <- paired_t(paired)
+
+pct <- function(x) sprintf("%.2f%%", 100 * x)
+pp <- function(x) sprintf("%+.2f pp", 100 * x)
+
+eda_dir <- file.path(results_root(params$root), "datasets", m$dataset_id)
+tem_eda <- dir.exists(eda_dir)
+joined <- if (tem_eda) join_predictions_eda(run, root = params$root) else NULL
+```
+
+## Identificação
+
+```{r}
+#| tbl-cap: "Procedência do run"
+knitr::kable(data.frame(
+  Campo = c("Run", "Modelo", "Dataset", "Commit", "Seeds", "Épocas finais", "Orçamento", "Acelerador"),
+  Valor = c(
+    run$run_id, m$model,
+    if (nzchar(m$subset)) paste0(m$dataset, "/", m$subset) else m$dataset,
+    m$commit, m$n_seeds, m$final_epochs, m$budget, m$accelerator
+  )
+))
+```
+
+::: callout-note
+## O que este relatório não faz
+
+Nenhum número aqui influenciou qual modelo foi entregue. A seleção baseline-vs-tunada aconteceu no pipeline Python, na **validação**, usando apenas médias, antes de qualquer teste de hipótese existir. Como o treino não calcula p-valor, nenhum p-valor pode vazar para a decisão.
+
+Configuração selecionada: **`r m$selected_label`**.
+:::
+
+## Variância medida
+
+```{r}
+#| results: asis
+v <- m$variance
+fontes <- c(
+  "inicialização dos pesos" = isTRUE(v$vary_init),
+  "ordem dos dados" = isTRUE(v$vary_data_order),
+  "split treino/validação" = isTRUE(v$vary_split)
+)
+variadas <- names(fontes)[fontes]
+cat("Fontes que **variaram** entre as seeds:", paste(variadas, collapse = ", "), "\n\n")
+if (isTRUE(v$uses_official_split)) {
+  cat("O dataset usa split de validação **oficial**, então o split não é uma fonte de variância aqui.\n\n")
+}
+if (length(variadas) <= 1) {
+  cat("::: {.callout-warning}\n## Intervalos subestimados\n\n",
+      "Apenas uma fonte de variância foi randomizada. Split e ordem de dados ficaram ",
+      "idênticos entre as seeds, então os intervalos abaixo medem só a variabilidade da ",
+      "inicialização e são **mais estreitos que a incerteza real** ",
+      "(Bouthillier et al., MLSys 2021). Para medir a variância completa, ligue ",
+      "`vary_data_order` e `vary_split` em `configs/train.yaml`.\n:::\n\n", sep = "")
+}
+```
+
+## Acurácia por seed
+
+```{r}
+#| fig-cap: "Cada linha liga o mesmo par de sementes nos dois arms."
+plot_paired_seeds(run$seed_metrics, "test")
+```
+
+```{r}
+#| tbl-cap: "Acurácia de teste por seed"
+knitr::kable(
+  transform(paired,
+    baseline = sprintf("%.2f%%", 100 * baseline),
+    tuned = sprintf("%.2f%%", 100 * tuned),
+    diff = sprintf("%+.2f pp", 100 * diff)
+  ),
+  col.names = c("seed", "baseline", "tunada", "Δ")
+)
+```
+
+## Teste pareado
+
+```{r}
+#| results: asis
+if (is.na(tt$p_value)) {
+  cat("As diferenças por seed são constantes (desvio zero), então o teste t é indefinido. ",
+      "Acontece quando a busca devolve a própria configuração baseline.\n")
+} else {
+  w <- paired_wilcoxon(paired)
+  cat(sprintf("- **Diferença média**: %s (baseline %s → tunada %s)\n",
+              pp(tt$diff_mean), pct(mean(paired$baseline)), pct(mean(paired$tuned))))
+  cat(sprintf("- **t pareado**: t(%d) = %.3f, p = %.4f\n", tt$df, tt$t, tt$p_value))
+  cat(sprintf("- **IC95%% da diferença**: [%s, %s]\n", pp(tt$ci_low), pp(tt$ci_high)))
+  cat(sprintf("- **Cohen's d_z**: %.3f, IC95%% [%.3f, %.3f]\n",
+              tt$cohens_dz, tt$dz_ci_low, tt$dz_ci_high))
+  cat(sprintf("- **Wilcoxon pareado** (robustez, sem supor normalidade): p = %.4f\n", w$p_value))
+}
+```
+
+```{r}
+#| fig-cap: "O intervalo cruzando o zero indica que a direção do efeito não está estabelecida."
+#| fig-height: 2.2
+p <- plot_difference_ci(tt)
+if (!is.null(p)) p
+```
+
+O intervalo do `d_z` é o que o pipeline anterior não fornecia. Um tamanho de efeito sem incerteza é um número solto: com poucas seeds, o próprio `d_z` tem erro grande, e o intervalo mostra isso.
+
+### Equivalência
+
+```{r}
+#| results: asis
+eq <- equivalence_tost(paired)
+if (is.null(eq)) {
+  cat("TOST indisponível para este run.\n")
+} else {
+  cat(sprintf("Margem de equivalência de 1 p.p.: p = %.4f.\n\n%s\n", eq$p_tost, eq$decision))
+}
+```
+
+Com poucas seeds, "não significativo" é o desfecho mais provável, e **não** significa "equivalente". O TOST responde à pergunta que o teste t nunca responde: a diferença é pequena o bastante para ser irrelevante?
+
+## Estimativas robustas
+
+```{r}
+#| tbl-cap: "IQM com IC por bootstrap"
+rs <- robust_summary(run, "test")
+knitr::kable(data.frame(
+  arm = c("baseline", "tunada"),
+  IQM = c(pct(rs$baseline_iqm), pct(rs$tuned_iqm)),
+  IC95 = c(
+    sprintf("[%s, %s]", pct(rs$baseline_ci_low), pct(rs$baseline_ci_high)),
+    sprintf("[%s, %s]", pct(rs$tuned_ci_low), pct(rs$tuned_ci_high))
+  )
+))
+```
+
+`r sprintf("**P(tunada > baseline) = %.2f**", rs$prob_improvement)` — a probabilidade de melhoria responde "vale trocar?", pergunta distinta da que o p-valor responde (evidência contra a hipótese nula). Método de intervalo: `r rs$ci_type`.
+
+A média interquartil descarta os extremos: com 5 execuções, um outlier domina a média e a mediana joga metade da informação fora (Agarwal et al., NeurIPS 2021).
+
+## McNemar
+
+```{r}
+#| results: asis
+mc <- mcnemar_from_run(run)
+cat(sprintf("Par usado: seed %s (baseline) contra seed %s (tunada), ambas as de melhor **validação**.\n\n",
+            m$mcnemar_baseline_seed, m$mcnemar_tuned_seed))
+cat(sprintf("- Discordâncias: n01 = %d (só a tunada acerta), n10 = %d (só a baseline acerta)\n", mc$n01, mc$n10))
+cat(sprintf("- Método: `%s`, p = %.4e\n", mc$method, mc$p_value))
+```
+
+O McNemar opera no nível do exemplo, e o teste t no nível da seed. São perguntas diferentes, e podem discordar: o t pode não detectar diferença entre médias de poucas seeds enquanto o McNemar detecta discordância sistemática entre milhares de exemplos.
+
+Escolher a seed pela melhor validação, e nunca pela melhor acurácia de teste, é o que impede o conjunto de teste de entrar na escolha do que reportar.
+
+## Métricas pós-hoc
+
+```{r}
+#| tbl-cap: "Calculadas a partir das predições exportadas, sem retreinar"
+met <- run_metrics(run) |>
+  dplyr::filter(split == "test") |>
+  dplyr::group_by(arm) |>
+  dplyr::summarise(
+    acurácia = mean(accuracy),
+    `balanced accuracy` = mean(balanced_accuracy),
+    `F1 macro` = mean(f1_macro),
+    .groups = "drop"
+  )
+knitr::kable(met, digits = 4)
+```
+
+```{r}
+#| results: asis
+gap <- met$acurácia - met$`balanced accuracy`
+if (any(gap > 0.05)) {
+  cat("::: {.callout-important}\n## Acurácia é enganosa neste dataset\n\n",
+      sprintf("A diferença entre acurácia e balanced accuracy chega a %.1f pontos percentuais. ", 100 * max(gap)),
+      "Isso indica que o modelo acerta a classe majoritária e falha nas raras. ",
+      "Reporte balanced accuracy ou F1 macro, não acurácia.\n\n",
+      "Nada disso exigiu retreinar: as predições por exemplo estavam exportadas, ",
+      "então a escolha de métrica foi feita **depois** do experimento.\n:::\n", sep = "")
+}
+```
+
+```{r}
+#| fig-cap: "Matriz de confusão do arm selecionado (seed de melhor validação)."
+sel_seed <- if (m$selected_arm == "tuned") m$mcnemar_tuned_seed else m$mcnemar_baseline_seed
+sel <- run$predictions |>
+  dplyr::filter(arm == m$selected_arm, split == "test", seed_init == sel_seed)
+plot_confusion(confusion_matrix(sel$y_true, sel$y_pred, m$class_names))
+```
+
+```{r}
+#| tbl-cap: "Métricas por classe do arm selecionado"
+knitr::kable(per_class_metrics(sel$y_true, sel$y_pred, m$class_names), digits = 3)
+```
+
+## Orçamento de busca
+
+```{r}
+#| fig-cap: "Se a curva ainda sobe no fim, o orçamento de busca não saturou."
+p <- if (!is.null(run$trials)) plot_evp_curve(run$trials) else NULL
+if (!is.null(p)) p
+```
+
+```{r}
+#| results: asis
+if (is.null(run$trials)) {
+  cat("Histórico de trials indisponível para este run.\n")
+} else {
+  cat(sprintf("Melhor trial da busca: val_acc = %.4f em %d trials completos.\n\n",
+              m$search_best_val_acc, sum(run$trials$state == "COMPLETE")))
+  cat("Reportar o melhor de N trials como se fosse o desempenho do método é um ",
+      "estimador enviesado para cima: quanto mais trials, maior o máximo, mesmo sem ",
+      "ganho real (Dodge et al., EMNLP 2019). Por isso a decisão final vem do ",
+      "retreino multi-seed, não da busca.\n", sep = "")
+}
+```
+
+## Erro cruzado com o dataset
+
+```{r}
+#| eval: !expr tem_eda
+#| fig-cap: "A média global esconde classes em que o modelo falha por completo."
+plot_error_by_class(joined, "test")
+```
+
+```{r}
+#| eval: !expr tem_eda
+#| fig-cap: "Erro por faixa de intensidade média da imagem."
+plot_error_vs_feature(joined, "mean_intensity", "test")
+```
+
+```{r}
+#| eval: !expr tem_eda
+#| fig-cap: "Dificuldade do dado contra instabilidade de treino."
+plot_error_consistency(consistently_wrong(run, "test"))
+```
+
+```{r}
+#| eval: !expr tem_eda
+#| results: asis
+cw <- consistently_wrong(run, "test")
+cat(sprintf("Exemplos que **todas** as seeds erram: %d. Exemplos que só **algumas** erram: %d.\n\n",
+            sum(cw$always_wrong), sum(cw$sometimes_wrong)))
+cat("A distinção importa para decidir o próximo passo: os primeiros são limite do dado ",
+    "ou do modelo e não melhoram com mais seeds; os segundos são ruído de otimização e ",
+    "indicam que o treino ainda não está estável.\n", sep = "")
+```
+
+```{r}
+#| eval: !expr (!tem_eda)
+#| results: asis
+cat("::: {.callout-tip}\n## EDA ausente\n\n",
+    sprintf("Rode `just eda %s` para habilitar a análise de erro por classe e o ", m$dataset),
+    "cruzamento com propriedades da imagem. O join usa a chave `(split, example_idx)`, ",
+    "compartilhada entre o EDA e as predições.\n:::\n", sep = "")
+```
+
+------------------------------------------------------------------------
+
+::: {.callout-note appearance="minimal"}
+Gerado por `analysis/report.qmd` (pacote `cvlabstats`) a partir dos artefatos em `results/runs/`. A camada de análise depende apenas do contrato de arquivos: não importa código Python, não lê imagens e não treina nada. Ver `docs/ANALISE-R.md`.
+:::

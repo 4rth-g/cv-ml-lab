@@ -1,0 +1,2 @@
+run_id,timestamp_utc,commit,model,dataset,subset,budget,n_seeds,selected_arm,path
+cnn-medmnist-2026-08-16_19-55-22,2026-08-16T22:55:29.317789+00:00,a7742df-dirty,cnn,medmnist,breastmnist,smoke,2,tuned,runs/cnn-medmnist-2026-08-16_19-55-22

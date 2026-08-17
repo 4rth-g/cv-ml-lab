@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "run_id": "cnn-medmnist-2026-08-16_19-55-22",
+  "timestamp_utc": "2026-08-16T22:55:29.317789+00:00",
+  "commit": "a7742df-dirty",
+  "model": "cnn",
+  "dataset": "medmnist",
+  "subset": "breastmnist",
+  "dataset_id": "medmnist-breastmnist-28",
+  "budget": "smoke",
+  "n_seeds": 2,
+  "final_epochs": 2,
+  "variance": {
+    "vary_init": true,
+    "vary_data_order": false,
+    "vary_split": false,
+    "uses_official_split": true
+  },
+  "in_channels": 1,
+  "num_classes": 2,
+  "class_names": [
+    "malignant",
+    "normal, benign"
+  ],
+  "n_val": 78,
+  "n_test": 156,
+  "accelerator": "auto",
+  "baseline_config": {
+    "_target_": "cvlab.models.cnn.ConfigurableCNN",
+    "num_filters": 32,
+    "dropout_rate": 0.5,
+    "fc_units": 128,
+    "n_conv_blocks": 2,
+    "lr": 0.001,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 1e-06
+  },
+  "tuned_config": {
+    "_target_": "cvlab.models.cnn.ConfigurableCNN",
+    "num_filters": 32,
+    "dropout_rate": 0.5,
+    "fc_units": 128,
+    "n_conv_blocks": 2,
+    "lr": 0.001,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 1e-06
+  },
+  "search_best_val_acc": 0.6102756857872009,
+  "selected_arm": "tuned",
+  "selected_label": "melhor config (Optuna)",
+  "tuned_ge_baseline": true,
+  "mcnemar_baseline_seed": 43,
+  "mcnemar_tuned_seed": 43
+}

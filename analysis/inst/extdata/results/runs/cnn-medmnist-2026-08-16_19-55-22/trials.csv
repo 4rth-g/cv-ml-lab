@@ -1,0 +1,5 @@
+trial_number,state,value,duration_s,params_json
+0,COMPLETE,0.6102756857872009,0.847905,"{""batch_size"": 64, ""dropout_rate"": 0.5, ""fc_units"": 128, ""lr"": 0.001, ""n_conv_blocks"": 2, ""num_filters"": 32, ""optimizer"": ""adam"", ""weight_decay"": 1e-06}"
+1,COMPLETE,0.5,0.805762,"{""batch_size"": 32, ""dropout_rate"": 0.0936111842654619, ""fc_units"": 256, ""lr"": 0.0044447541666908135, ""n_conv_blocks"": 2, ""num_filters"": 32, ""optimizer"": ""sgd"", ""weight_decay"": 5.34293726127978e-05}"
+2,COMPLETE,0.5,0.750848,"{""batch_size"": 128, ""dropout_rate"": 0.219817105976215, ""fc_units"": 128, ""lr"": 0.001076962247826313, ""n_conv_blocks"": 2, ""num_filters"": 32, ""optimizer"": ""adam"", ""weight_decay"": 2.4586032763280077e-06}"
+3,COMPLETE,0.523809552192688,0.584277,"{""batch_size"": 32, ""dropout_rate"": 0.020633112669131037, ""fc_units"": 64, ""lr"": 0.0002060924941320236, ""n_conv_blocks"": 3, ""num_filters"": 16, ""optimizer"": ""sgd"", ""weight_decay"": 2.259279742015697e-06}"
