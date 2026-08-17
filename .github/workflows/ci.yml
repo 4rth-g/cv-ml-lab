@@ -33,3 +33,30 @@ jobs:
 
       - name: Run Pytest
         run: uv run pytest
+
+  # Camada de análise (R). Job separado de propósito: `analysis/` só depende do
+  # contrato de arquivos, nunca de código Python, então as duas suítes não
+  # precisam do mesmo ambiente.
+  #
+  # Deliberadamente SEM Nix aqui: construir o rWrapper sem cache leva dezenas de
+  # minutos. O flake é para a máquina de desenvolvimento; no CI bastam os
+  # pacotes, porque os testes são valores fixos sobre funções puras.
+  r-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: analysis
+          extra-packages: |
+            any::devtools
+            any::testthat
+
+      - name: Run testthat
+        run: Rscript -e 'devtools::test("analysis", stop_on_failure = TRUE)'
