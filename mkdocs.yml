@@ -52,10 +52,13 @@ markdown_extensions:
 nav:
   - Início: index.md
   - Fluxo de trabalho: WORKFLOW.md
+  - Análise estatística (R): ANALISE-R.md
   - Referência da API:
       - Tuning (busca + comparação): reference/tuning.md
       - Modelos: reference/models.md
       - Dados: reference/data.md
-      - Tracking e estatística: reference/tracking.md
+      - Tracking: reference/tracking.md
+      - Export de artefatos: reference/export.md
+      - EDA de dataset: reference/eda.md
       - Hardware (XPU): reference/xpu.md
       - Treino (entrypoint): reference/train.md
