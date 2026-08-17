@@ -18,14 +18,15 @@ dependencies = [
     "omegaconf",
     "wandb",
     "optuna>=3.5.0",
-    "scipy",
     "torchmetrics",
+    # >=3.0 para o parâmetro `size` (MedMNIST+: 28/64/128/224).
+    "medmnist>=3.0",
     "numpy",
-    "matplotlib",
 ]
 
 [project.scripts]
 cvlab-train = "cvlab.train:main"
+cvlab-eda = "cvlab.eda:main"
 
 [dependency-groups]
 dev = [

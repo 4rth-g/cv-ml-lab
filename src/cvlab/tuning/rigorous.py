@@ -1,4 +1,4 @@
-"""Comparação estatística rigorosa entre a baseline e a configuração tunada.
+"""Retreino multi-seed pareado e seleção da configuração final.
 
 Segunda etapa do método (a primeira é `cvlab.tuning.search`). Enquanto a
 busca escolhe uma configuração candidata olhando UMA seed num subconjunto, aqui a
@@ -6,38 +6,134 @@ decisão é tomada com rigor:
 
 - **Retreino multi-seed** de ambas as configurações no split completo, para medir
   variância em vez de confiar num resultado de sorte.
-- **Estatística pareada** (mesma seed nos dois modelos) para cancelar o ruído
-  seed-a-seed e ganhar poder: teste t pareado, Cohen's d_z, IC95% e McNemar.
+- **Pareamento por seed** (as mesmas sementes nos dois lados), que cancela o
+  ruído comum e é o que torna válido o teste pareado feito depois.
 - **Seleção na validação**, com *fallback* para a baseline se a config tunada não
-  a superar — o teste é usado uma única vez, só para reportar.
+  a superar. O conjunto de teste nunca entra na decisão.
+
+**A inferência estatística não acontece aqui.** Teste t, Cohen's d_z, IC95%,
+McNemar, correção para múltiplas comparações e bootstrap vivem em ``analysis/``
+(R), alimentados pelos artefatos de `cvlab.export`. A separação não é
+organizacional: como nenhum p-valor é calculado durante o treino, nenhum p-valor
+pode influenciar qual modelo é entregue.
 
 Ver `rigorous_compare`.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import lightning as L
 import numpy as np
 import torch
-from scipy import stats
 
 from cvlab.data.base import BaseImageClfDataModule
 from cvlab.models.factory import build_model, lit_params
 from cvlab.models.lit_module import LitClassifier
-from cvlab.tracking import mcnemar_test
 from cvlab.xpu import build_trainer
+
+
+@dataclass(frozen=True)
+class RunSeeds:
+    """As três fontes de variância de um treino, mantidas separadas.
+
+    Um multi-seed que varia só ``init`` mede a variância da inicialização dos
+    pesos e nada mais: split e ordem de dados continuam fixos, e o intervalo de
+    confiança resultante sai estreito demais (Bouthillier et al., MLSys 2021).
+
+    Registrar as três em colunas próprias é o que permite ao relatório dizer
+    *qual* variância foi medida, em vez de apresentar todas como se fossem uma.
+    O default do cvlab varia apenas ``init``, preservando o protocolo histórico;
+    ver ``configs/train.yaml`` (bloco ``variance``).
+    """
+
+    init: int
+    data: int
+    split: int
+
+
+def plan_run_seeds(cfg: Any, n_seeds: int) -> list[RunSeeds]:
+    """Monta as ``n_seeds`` triplas de sementes do multi-seed a partir de ``cfg.variance``.
+
+    Cada fonte ligada recebe ``base_seed + i``; cada fonte desligada fica fixa em
+    ``base_seed``. O default (só ``init`` ligada) reproduz exatamente o protocolo
+    histórico do repo — importante para não invalidar em silêncio os resultados
+    já reportados.
+
+    Ligar ``vary_data_order`` e ``vary_split`` alarga o intervalo de confiança,
+    porque passa a medir variância que antes ficava escondida. Isso é uma
+    correção, não uma piora do resultado.
+    """
+    base = int(cfg.seed)
+    variance = cfg.get("variance", {}) if hasattr(cfg, "get") else {}
+    vary_init = bool(variance.get("vary_init", True))
+    vary_data = bool(variance.get("vary_data_order", False))
+    vary_split = bool(variance.get("vary_split", False))
+
+    return [
+        RunSeeds(
+            init=base + i if vary_init else base,
+            data=base + i if vary_data else base,
+            split=base + i if vary_split else base,
+        )
+        for i in range(n_seeds)
+    ]
+
+
+def _seed_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Achata os runs em formato longo: uma linha por (arm, seed, split).
+
+    Formato longo, e não largo, porque é o que o R consome direto
+    (``dplyr::group_by``) e o que sobrevive a acrescentar splits ou arms depois
+    sem renomear coluna nenhuma.
+    """
+    rows: list[dict[str, Any]] = []
+    for arm, runs in (("baseline", baseline_runs), ("tuned", best_runs)):
+        for r in runs:
+            rs: RunSeeds = r["seeds"]
+            for split, key in (("val", "val_acc"), ("test", "test_acc")):
+                rows.append(
+                    {
+                        "arm": arm,
+                        "seed_init": rs.init,
+                        "seed_data": rs.data,
+                        "seed_split": rs.split,
+                        "split": split,
+                        "acc": float(r[key]),
+                    }
+                )
+    return rows
+
+
+def _prediction_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Predições por exemplo de cada (arm, seed, split), prontas para o export."""
+    out: list[dict[str, Any]] = []
+    for arm, runs in (("baseline", baseline_runs), ("tuned", best_runs)):
+        for r in runs:
+            rs: RunSeeds = r["seeds"]
+            for split, (preds, targets) in r["per_split"].items():
+                out.append(
+                    {
+                        "arm": arm,
+                        "seed_init": rs.init,
+                        "split": split,
+                        "preds": preds,
+                        "targets": targets,
+                    }
+                )
+    return out
 
 
 def _train_single_run(
     config: dict[str, Any],
-    seed: int,
+    seeds: RunSeeds,
     datamodule: BaseImageClfDataModule,
     epochs: int,
     accelerator: str = "auto",
     pl_logger: Any = None,
-) -> tuple[float, float, L.LightningModule, list[int], list[int]]:
+) -> tuple[float, float, L.LightningModule, dict[str, tuple[list[int], list[int]]]]:
     """Treina uma vez no split completo e avalia no teste, com early stopping por validação.
 
     Restaura os pesos da época de melhor ``val_acc`` (via ``BestValRestoreCallback``)
@@ -47,7 +143,8 @@ def _train_single_run(
     Args:
         config: Configuração achatada com ``_target_`` + hiperparâmetros de
             arquitetura e de treino (ver `cvlab.models.factory`).
-        seed: Semente desta rodada. No multi-seed, é o que difere entre execuções.
+        seeds: As três sementes desta rodada (ver :class:`RunSeeds`). No
+            multi-seed, é o que difere entre execuções.
         datamodule: DataModule do dataset (train/val/test).
         epochs: Número de épocas de treino (``final_epochs``).
         accelerator: ``"auto"``, ``"xpu"``, ``"cpu"``... repassado a ``build_trainer``.
@@ -56,11 +153,12 @@ def _train_single_run(
             métricas finais).
 
     Returns:
-        tuple: ``(test_acc, best_val_acc, model, preds, true_labels)`` — onde
-        ``preds`` e ``true_labels`` são as predições e rótulos do conjunto de
-        teste (usados no McNemar), e ``model`` já tem os pesos da melhor época.
+        tuple: ``(test_acc, best_val_acc, model, per_split)`` — onde ``per_split``
+        mapeia ``"val"``/``"test"`` para ``(preds, true_labels)`` por exemplo, e
+        ``model`` já tem os pesos da melhor época.
     """
-    L.seed_everything(seed, workers=True)
+    L.seed_everything(seeds.init, workers=True)
+    datamodule.configure_run_seeds(split_seed=seeds.split, data_seed=seeds.data)
     datamodule.setup("fit")
 
     model = build_model(
@@ -110,23 +208,29 @@ def _train_single_run(
     if best_state is not None:
         lit_module.load_state_dict(best_state)
 
-    # Avaliação no teste. Coleta predições por exemplo (não só a acurácia) porque
-    # o McNemar precisa comparar acertos/erros exemplo a exemplo entre dois modelos.
+    # Predições por exemplo, não só a acurácia. Dois motivos: o McNemar compara
+    # acerto/erro exemplo a exemplo, e o export delas é o que torna qualquer
+    # outra métrica (F1, AUC, kappa, matriz de confusão) calculável DEPOIS, sem
+    # retreinar. Val entra junto do teste para que a escolha de métrica não
+    # precise olhar o teste.
     lit_module.eval()
-    all_preds: list[int] = []
-    all_targets: list[int] = []
-
     device = lit_module.device
-    with torch.no_grad():
-        for x, y in test_dl:
-            x = x.to(device)
-            logits = lit_module(x)
-            preds = torch.argmax(logits, dim=1).cpu().tolist()
-            all_preds.extend(preds)
-            all_targets.extend(y.tolist())
+    per_split: dict[str, tuple[list[int], list[int]]] = {}
 
-    test_acc = float(np.mean(np.array(all_preds) == np.array(all_targets)))
-    return test_acc, best_val_acc, lit_module, all_preds, all_targets
+    for split_name, loader in (("val", val_dl), ("test", test_dl)):
+        preds_out: list[int] = []
+        targets_out: list[int] = []
+        with torch.no_grad():
+            for x, y in loader:
+                x = x.to(device)
+                logits = lit_module(x)
+                preds_out.extend(torch.argmax(logits, dim=1).cpu().tolist())
+                targets_out.extend(y.tolist())
+        per_split[split_name] = (preds_out, targets_out)
+
+    test_preds, test_targets = per_split["test"]
+    test_acc = float(np.mean(np.array(test_preds) == np.array(test_targets)))
+    return test_acc, best_val_acc, lit_module, per_split
 
 
 def train_final(
@@ -152,8 +256,9 @@ def train_final(
         tuple: ``(model, val_acc, test_acc)`` do treino final.
     """
     accelerator = cfg.trainer.get("accelerator", "auto")
-    test_acc, val_acc, model, _, _ = _train_single_run(
-        config, cfg.seed, datamodule, cfg.tuning.final_epochs, accelerator=accelerator, pl_logger=pl_logger
+    base_seeds = RunSeeds(init=cfg.seed, data=cfg.seed, split=cfg.seed)
+    test_acc, val_acc, model, _ = _train_single_run(
+        config, base_seeds, datamodule, cfg.tuning.final_epochs, accelerator=accelerator, pl_logger=pl_logger
     )
     return model, val_acc, test_acc
 
@@ -164,63 +269,57 @@ def rigorous_compare(
     datamodule: BaseImageClfDataModule,
     cfg: Any,
 ) -> dict[str, Any]:
-    """Compara baseline e config tunada com rigor estatístico e escolhe uma delas.
+    """Retreina baseline e config tunada multi-seed e escolhe uma delas.
 
     Executa o núcleo do método:
 
     1. **Retreino multi-seed**: treina baseline e tunada com as MESMAS N seeds no
-       split completo. Usar as mesmas seeds torna as amostras *pareadas* (cada seed
-       vira um par baseline/tunada sob idêntica init e ordem de dados).
-    2. **Testes pareados** sobre a acurácia de teste:
-       - *Teste t pareado* (``ttest_rel``): compara par a par, cancelando o ruído
-         comum a cada seed → mais poder que um t independente.
-       - *Cohen's d_z*: tamanho do efeito (média das diferenças / desvio das
-         diferenças); diz se a diferença é grande, além de significativa.
-       - *IC95%* da diferença média: magnitude com incerteza.
-       - *McNemar*: teste ao nível de exemplo (discordâncias no mesmo test set),
-         complementar ao t (que é ao nível de seed).
+       split completo (ver :class:`RunSeeds`). Usar as mesmas seeds torna as
+       amostras *pareadas* — cada seed vira um par baseline/tunada — e é isso que
+       autoriza o teste pareado feito depois, em R.
+    2. **Coleta de evidência**: acurácia por seed e predições por exemplo, de
+       validação e teste, no formato que `cvlab.export` grava. Nenhuma
+       estatística inferencial é computada aqui.
     3. **Seleção na validação**: a tunada só é escolhida se
        ``best_val_mean >= baseline_val_mean``; caso contrário, *fallback* para a
-       baseline. O teste nunca entra na decisão — só é reportado.
+       baseline. O conjunto de teste nunca entra na decisão.
 
     Args:
         baseline_cfg: Configuração baseline (com ``_target_``).
         best_cfg: Configuração tunada vinda de ``study.best_params`` (com ``_target_``).
         datamodule: DataModule do dataset.
         cfg: Config Hydra; usa ``cfg.tuning.n_seeds``, ``cfg.tuning.final_epochs``,
-            ``cfg.seed`` e ``cfg.trainer.accelerator``.
+            ``cfg.seed``, ``cfg.variance`` e ``cfg.trainer.accelerator``.
 
     Returns:
-        dict: métricas agregadas (médias/desvios de val e teste por config),
-        estatísticas (``t_stat``, ``p_value``, ``cohens_d``, ``ci95_diff``,
-        ``mcnemar``), o flag ``tuned_ge_baseline`` e a escolha final
-        (``selected_name``, ``selected_config``, ``selected_model``).
+        dict: médias e desvios de val e teste por config, ``diff_test_mean``, as
+        linhas tabulares para o export (``seed_rows``, ``predictions``), as seeds
+        de melhor validação de cada lado (``mcnemar_baseline_seed``,
+        ``mcnemar_tuned_seed``), o flag ``tuned_ge_baseline`` e a escolha final
+        (``selected_arm``, ``selected_name``, ``selected_config``,
+        ``selected_model``).
     """
     n_seeds = cfg.tuning.n_seeds
     final_epochs = cfg.tuning.final_epochs
-    base_seed = cfg.seed
-    # As MESMAS seeds nos dois grupos → amostras pareadas (um par baseline/tunada
-    # por seed). É isso que habilita os testes pareados mais adiante.
-    seeds = [base_seed + i for i in range(n_seeds)]
+    seeds = plan_run_seeds(cfg, n_seeds)
     accelerator = cfg.trainer.get("accelerator", "auto")
 
-    baseline_runs: list[dict[str, Any]] = []
-    baseline_models: list[tuple[float, float, L.LightningModule, list[int], list[int]]] = []
-    for s in seeds:
-        test_acc, val_acc, model, preds, targets = _train_single_run(
-            baseline_cfg, s, datamodule, final_epochs, accelerator=accelerator
-        )
-        baseline_runs.append({"seed": s, "val_acc": val_acc, "test_acc": test_acc})
-        baseline_models.append((test_acc, val_acc, model, preds, targets))
+    # Um "arm" é um lado da comparação. As MESMAS seeds nos dois → amostras
+    # pareadas (um par baseline/tunada por seed), que é o que cancela o ruído
+    # comum e habilita os testes pareados.
+    def run_arm(config: dict[str, Any]) -> tuple[list[dict[str, Any]], list[Any]]:
+        runs: list[dict[str, Any]] = []
+        models: list[Any] = []
+        for rs in seeds:
+            test_acc, val_acc, model, per_split = _train_single_run(
+                config, rs, datamodule, final_epochs, accelerator=accelerator
+            )
+            runs.append({"seeds": rs, "val_acc": val_acc, "test_acc": test_acc, "per_split": per_split})
+            models.append(model)
+        return runs, models
 
-    best_runs: list[dict[str, Any]] = []
-    best_models: list[tuple[float, float, L.LightningModule, list[int], list[int]]] = []
-    for s in seeds:
-        test_acc, val_acc, model, preds, targets = _train_single_run(
-            best_cfg, s, datamodule, final_epochs, accelerator=accelerator
-        )
-        best_runs.append({"seed": s, "val_acc": val_acc, "test_acc": test_acc})
-        best_models.append((test_acc, val_acc, model, preds, targets))
+    baseline_runs, baseline_models = run_arm(baseline_cfg)
+    best_runs, best_models = run_arm(best_cfg)
 
     baseline_val_arr = np.array([r["val_acc"] for r in baseline_runs])
     best_val_arr = np.array([r["val_acc"] for r in best_runs])
@@ -237,35 +336,17 @@ def rigorous_compare(
     baseline_test_std = float(baseline_test_arr.std(ddof=1)) if n_seeds > 1 else 0.0
     best_test_std = float(best_test_arr.std(ddof=1)) if n_seeds > 1 else 0.0
 
-    # Teste t PAREADO sobre a acurácia de teste: opera nas diferenças por seed
-    # (best - baseline), então o ruído comum a cada seed se cancela → mais poder.
-    diff_acc = best_test_arr - baseline_test_arr
-    t_stat, p_value = stats.ttest_rel(best_test_arr, baseline_test_arr)
-    diff_mean = float(diff_acc.mean())
-    diff_std = float(diff_acc.std(ddof=1)) if n_seeds > 1 else 0.0
-    # Cohen's d_z: tamanho do efeito = média das diferenças / desvio das diferenças.
-    cohens_d = diff_mean / diff_std if diff_std > 0 else 0.0
+    # Diferença média das acurácias de teste: descritivo, para o print e o W&B.
+    # Teste t, Cohen's d, IC95% e McNemar NÃO são calculados aqui — são
+    # inferência, e inferência é responsabilidade do `analysis/` (R), a partir
+    # dos artefatos exportados. Ver `cvlab.export`.
+    diff_mean = float((best_test_arr - baseline_test_arr).mean())
 
-    # IC95% para a diferença pareada
-    if n_seeds > 1 and diff_std > 0:
-        se = diff_std / np.sqrt(n_seeds)
-        t_crit = stats.t.ppf(0.975, df=n_seeds - 1)
-        ci95 = (float(diff_mean - t_crit * se), float(diff_mean + t_crit * se))
-    else:
-        ci95 = (diff_mean, diff_mean)
-
-    # McNemar precisa de UM modelo por lado. Escolhe-se, de cada lado, a seed de
-    # melhor VALIDAÇÃO (nunca a de melhor teste → sem vazamento). Compara acerto/erro
-    # exemplo a exemplo; mcnemar_test usa binomial exata (<25 discordâncias) ou
-    # chi2 com correção de continuidade.
+    # Índice da seed de melhor VALIDAÇÃO de cada lado (nunca a de melhor teste →
+    # seria vazamento). Serve para dois fins: escolher o modelo entregue, e
+    # registrar no manifest qual par o McNemar deve usar do lado do R.
     best_baseline_idx = int(np.argmax(baseline_val_arr))
     best_tuned_idx = int(np.argmax(best_val_arr))
-
-    preds_baseline_best_val = baseline_models[best_baseline_idx][3]
-    preds_tuned_best_val = best_models[best_tuned_idx][3]
-    y_test_labels = best_models[best_tuned_idx][4]
-
-    mcnemar_res = mcnemar_test(y_test_labels, preds_baseline_best_val, preds_tuned_best_val)
 
     # Seleção NA VALIDAÇÃO (nunca no teste): a tunada só vence se empatar ou superar
     # a baseline na validação média. Senão, fallback p/ baseline — o guard-rail que
@@ -274,14 +355,21 @@ def rigorous_compare(
     if tuned_ge_baseline:
         selected_name = "melhor config (Optuna)"
         selected_config = best_cfg
-        selected_model = best_models[best_tuned_idx][2]
+        selected_model = best_models[best_tuned_idx]
     else:
         selected_name = "baseline (fallback)"
         selected_config = baseline_cfg
-        selected_model = baseline_models[best_baseline_idx][2]
+        selected_model = baseline_models[best_baseline_idx]
 
     return {
         "n_seeds": n_seeds,
+        "seed_rows": _seed_rows(baseline_runs, best_runs),
+        "predictions": _prediction_rows(baseline_runs, best_runs),
+        "mcnemar_baseline_seed": baseline_runs[best_baseline_idx]["seeds"].init,
+        "mcnemar_tuned_seed": best_runs[best_tuned_idx]["seeds"].init,
+        "selected_arm": "tuned" if tuned_ge_baseline else "baseline",
+        "diff_test_mean": diff_mean,
+        "uses_official_split": bool(datamodule.uses_official_split),
         "baseline_config": baseline_cfg,
         "best_config": best_cfg,
         "baseline_val_mean": baseline_val_mean,
@@ -292,13 +380,6 @@ def rigorous_compare(
         "baseline_test_std": baseline_test_std,
         "best_test_mean": best_test_mean,
         "best_test_std": best_test_std,
-        "baseline_test_accs": baseline_test_arr.tolist(),
-        "best_test_accs": best_test_arr.tolist(),
-        "t_stat": float(t_stat) if not np.isnan(t_stat) else 0.0,
-        "p_value": float(p_value) if not np.isnan(p_value) else 1.0,
-        "cohens_d": float(cohens_d),
-        "ci95_diff": ci95,
-        "mcnemar": mcnemar_res,
         "tuned_ge_baseline": tuned_ge_baseline,
         "selected_name": selected_name,
         "selected_config": selected_config,

@@ -23,17 +23,40 @@ venv/
 /data/
 /wandb/
 /outputs/
-/results/
+
+# results/: ignora o conteúdo, MENOS os artefatos leves que alimentam a análise
+# em R. São centenas de KB por run e é o que permite `just report` reproduzir as
+# tabelas a partir de um clone — sem eles, o relatório só existe em quem treinou.
+# Ignorar o diretório inteiro (`/results/`) não funcionaria: o git não permite
+# re-incluir arquivo cujo diretório pai está excluído.
+/results/*
+!/results/runs/
+!/results/datasets/
+
+# Os pesados continuam fora, inclusive dentro de results/runs/.
 *.db
 *.ckpt
 *.pth
 .hydra/
+
+# Material de estudo pessoal (não versionado por ora)
+/estudo/
 
 # IDE
 .idea/
 .vscode/
 .lsp/
 .DS_Store
+
+# direnv (cache do devShell)
+/.direnv/
+
+# Relatório gerado pelo Quarto. O `quarto preview` renderiza AO LADO do .qmd,
+# não em output/, então o report.html solto também precisa entrar aqui.
+/analysis/output/
+/analysis/.quarto/
+/analysis/report.html
+/analysis/report_files/
 
 # MkDocs (site gerado)
 /site/
