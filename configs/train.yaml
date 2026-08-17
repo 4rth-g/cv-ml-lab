@@ -11,3 +11,20 @@ data_dir: ${paths.root_dir}/data
 output_dir: ${paths.root_dir}/results
 paths:
   root_dir: .
+
+# Quais fontes de variância o multi-seed faz variar.
+#
+# Variar só a inicialização (o default histórico) mede a variância dos PESOS e
+# nada mais: o split e a ordem dos dados ficam idênticos entre as seeds, e o
+# IC95% resultante sai estreito demais (Bouthillier et al., MLSys 2021).
+#
+# Ligar as outras duas alarga o intervalo porque passa a medir variância que
+# antes ficava escondida — é correção, não piora. Fica desligado por default
+# para não invalidar em silêncio os resultados já reportados; as três seeds vão
+# para o export em colunas próprias de qualquer forma, então o relatório sempre
+# diz qual variância foi medida.
+variance:
+  vary_init: true
+  vary_data_order: false
+  # Sem efeito em datasets com split oficial (ex.: MedMNIST).
+  vary_split: false
