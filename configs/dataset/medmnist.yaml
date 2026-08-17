@@ -1,0 +1,20 @@
+# MedMNIST v2: uma coleção de 18 datasets, exposta como UM DataModule parametrizado.
+#
+#   just train cnn medmnist dataset.subset=dermamnist
+#
+# in_channels, num_classes e class_names NÃO aparecem aqui de propósito: são
+# derivados de medmnist.INFO[subset] pelo DataModule. Escrevê-los à mão criaria
+# uma segunda fonte da verdade, livre para divergir do metadado oficial a cada
+# subset novo.
+_target_: cvlab.data.med_mnist.MedMNISTDataModule
+subset: pathmnist
+# Resoluções disponíveis: 28, 64, 128, 224. As arquiteturas do cvlab são
+# agnósticas à resolução (LazyLinear / AdaptiveAvgPool2d).
+size: 28
+data_dir: ${data_dir}
+batch_size: 64
+# Imagens RGB + augmentation por amostra: o dataloader vira gargalo com o default 2.
+num_workers: 4
+# 0.5 por canal é a normalização dos benchmarks publicados do MedMNIST.
+mean: null
+std: null
