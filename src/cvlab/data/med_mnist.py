@@ -1,21 +1,19 @@
 """MedMNIST v2 DataModule para o cvlab (https://medmnist.com/).
 
-O MedMNIST v2 é uma *coleção* de 18 datasets biomédicos padronizados, não um
-dataset único. Este módulo expõe os **11 subsets 2D de rótulo único** através de
-uma classe parametrizada: trocar de dataset é trocar o argumento ``subset``, não
-escrever código.
+O MedMNIST v2 é uma coleção de 18 datasets biomédicos padronizados. Este módulo
+expõe os 18 por uma classe parametrizada: trocar de dataset é trocar ``subset``.
 
     just train cnn medmnist dataset.subset=dermamnist
 
-Ficam de fora, por decisão de escopo:
+Três famílias, com tratamento diferente:
 
-- ``chestmnist``: multi-label (14 rótulos por exemplo). Exigiria
-  ``BCEWithLogitsLoss`` e métrica multilabel no :class:`~cvlab.models.lit_module.LitClassifier`,
-  além de quebrar o schema de export (``y_true`` escalar).
-- os 6 subsets ``*3d``: volumes 28³, incompatíveis com as arquiteturas ``Conv2d``
-  do cvlab. É família de modelo nova, não parametrização.
-
-Ambos falham cedo, no ``__init__``, com mensagem explícita.
+- **2D de rótulo único** (11): caminho padrão.
+- **Multi-label** (``chestmnist``): 14 achados que coexistem numa radiografia.
+  Usa ``BCEWithLogitsLoss`` e métrica multilabel.
+- **Volumétricos** (6, sufixo ``3d``): as 28 fatias entram como canais, o que
+  permite reusar as arquiteturas ``Conv2d``. Baseline honesta, não estado da
+  arte: a convolução trata as fatias como features paralelas, sem enxergar
+  continuidade entre elas.
 """
 
 from __future__ import annotations
@@ -24,14 +22,16 @@ from pathlib import Path
 from typing import Any
 
 import medmnist
+import numpy as np
+import torch
 from medmnist import INFO
 from torch.utils.data import Dataset
 from torchvision import transforms
 
 from cvlab.data.base import BaseImageClfDataModule
 
-#: Os 11 subsets 2D de rótulo único do MedMNIST v2 (ver docstring do módulo).
-SUPPORTED_SUBSETS = (
+#: Subsets 2D de rótulo único: caminho padrão, sem nada de especial.
+SINGLE_LABEL_2D = (
     "pathmnist",
     "dermamnist",
     "octmnist",
@@ -44,6 +44,25 @@ SUPPORTED_SUBSETS = (
     "organcmnist",
     "organsmnist",
 )
+
+#: Multi-label: 14 achados que coexistem numa mesma radiografia. Exige
+#: BCEWithLogitsLoss e métrica multilabel (ver `cvlab.models.lit_module`).
+MULTILABEL_SUBSETS = ("chestmnist",)
+
+#: Volumétricos 28x28x28. As arquiteturas do cvlab são Conv2d, então as 28
+#: fatias entram como CANAIS: a rede vê (28, 28, 28) em vez de um volume.
+#: É baseline honesta, não estado da arte em 3D — a convolução não enxerga
+#: continuidade entre fatias adjacentes, só as trata como features paralelas.
+VOLUMETRIC_SUBSETS = (
+    "organmnist3d",
+    "nodulemnist3d",
+    "adrenalmnist3d",
+    "fracturemnist3d",
+    "vesselmnist3d",
+    "synapsemnist3d",
+)
+
+SUPPORTED_SUBSETS = SINGLE_LABEL_2D + MULTILABEL_SUBSETS + VOLUMETRIC_SUBSETS
 
 #: Resoluções publicadas pelo MedMNIST+ (medmnist >= 3.0). As arquiteturas do
 #: cvlab são agnósticas à resolução (LazyLinear / AdaptiveAvgPool2d), então
@@ -62,13 +81,30 @@ _FLIP_SAFE = frozenset({"pathmnist", "dermamnist", "bloodmnist", "tissuemnist"})
 
 
 def _to_scalar_label(target: Any) -> int:
-    """Converte o rótulo ``(1,)`` do MedMNIST no escalar que a CrossEntropyLoss espera.
+    """Rótulo ``(1,)`` do MedMNIST -> escalar, que é o que a CrossEntropyLoss espera.
 
     Função de módulo, e não ``lambda``, de propósito: ``target_transform`` é
     serializada para os workers do DataLoader (``num_workers > 0``) e uma lambda
     não é picklável.
     """
     return int(target[0])
+
+
+def _to_multilabel(target: Any) -> torch.Tensor:
+    """Rótulo ``(14,)`` -> vetor float, que é o que a BCEWithLogitsLoss espera."""
+    return torch.as_tensor(target, dtype=torch.float32)
+
+
+def _volume_to_channels(volume: Any) -> torch.Tensor:
+    """Volume ``(1, D, H, W)`` -> tensor ``(D, H, W)`` em [0, 1].
+
+    As fatias viram canais. O `ToTensor` do torchvision não serve aqui: ele
+    espera PIL ou array HWC 2D, e o MedMNIST 3D entrega ndarray 4D.
+    """
+    t = torch.as_tensor(np.asarray(volume), dtype=torch.float32)
+    if t.ndim == 4:
+        t = t.squeeze(0)
+    return t.div(255.0) if t.max() > 1.0 else t
 
 
 class MedMNISTDataModule(BaseImageClfDataModule):
@@ -111,8 +147,13 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         info = self._require_supported(subset)
         if size not in SUPPORTED_SIZES:
             raise ValueError(f"size={size} inválido para MedMNIST. Use um de: {list(SUPPORTED_SIZES)}.")
+        if subset in VOLUMETRIC_SUBSETS and size != 28:
+            raise ValueError(f"{subset} só existe em 28³; size={size} não está publicado.")
 
-        n_channels = int(info["n_channels"])
+        is_3d = subset in VOLUMETRIC_SUBSETS
+        # No 3D as fatias viram canais: o modelo recebe profundidade em vez de
+        # um canal só. `size` também é a profundidade, porque os volumes são cúbicos.
+        n_channels = size if is_3d else int(info["n_channels"])
         labels = info["label"]
         # O dict do INFO é {"0": nome, "1": nome, ...}; a ordem numérica é a
         # ordem dos índices de classe, então iterar o dict direto seria frágil.
@@ -133,6 +174,8 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         self.subset = subset
         self.size = size
         self.task = str(info["task"])
+        self.is_3d = is_3d
+        self.is_multilabel = subset in MULTILABEL_SUBSETS
         self.n_samples = dict(info["n_samples"])
 
     @staticmethod
@@ -140,18 +183,6 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         """Valida o subset no ``__init__``, e não no meio do treino."""
         if subset in SUPPORTED_SUBSETS:
             return INFO[subset]
-
-        if subset == "chestmnist":
-            raise ValueError(
-                "chestmnist é multi-label (14 rótulos por exemplo) e está fora do escopo do cvlab: "
-                "exigiria BCEWithLogitsLoss e métrica multilabel no LitClassifier. "
-                f"Use um de: {list(SUPPORTED_SUBSETS)}."
-            )
-        if subset.endswith("3d"):
-            raise ValueError(
-                f"{subset} é volumétrico (28³) e as arquiteturas do cvlab são Conv2d. "
-                f"Use um de: {list(SUPPORTED_SUBSETS)}."
-            )
         raise ValueError(f"Subset MedMNIST desconhecido: {subset!r}. Use um de: {list(SUPPORTED_SUBSETS)}.")
 
     @property
@@ -163,8 +194,18 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         """Classe concreta do subset (ex.: ``medmnist.DermaMNIST``)."""
         return getattr(medmnist, str(INFO[self.subset]["python_class"]))
 
+    def _target_transform(self) -> Any:
+        """Multi-label vira vetor float; rótulo único vira escalar int."""
+        return _to_multilabel if self.is_multilabel else _to_scalar_label
+
     def _augment_ops(self) -> list:
-        """Augmentation por subset. Ver :data:`_FLIP_SAFE` para o porquê do flip ser restrito."""
+        """Augmentation por subset. Ver :data:`_FLIP_SAFE` para o porquê do flip ser restrito.
+
+        Vazio no 3D: as ops do torchvision operam sobre PIL/2D, e o volume já
+        chega como tensor de canais.
+        """
+        if self.is_3d:
+            return []
         ops: list = [transforms.RandomCrop(self.size, padding=max(2, self.size // 7))]
         if self.subset in _FLIP_SAFE:
             ops.extend([transforms.RandomHorizontalFlip(), transforms.RandomVerticalFlip()])
@@ -175,7 +216,10 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         cls = self._medmnist_cls()
         for split in ("train", "val", "test"):
-            cls(split=split, root=self.data_dir, download=True, size=self.size)
+            if self.is_3d:
+                cls(split=split, root=self.data_dir, download=True)
+            else:
+                cls(split=split, root=self.data_dir, download=True, size=self.size)
 
     def setup(self, stage: str | None = None) -> None:
         """Materializa os três splits OFICIAIS do MedMNIST.
@@ -190,14 +234,17 @@ class MedMNISTDataModule(BaseImageClfDataModule):
         tfm_plain = self.get_transform(augment=False)
 
         def build(split: str, transform: Any) -> Dataset:
-            return cls(
-                split=split,
-                root=self.data_dir,
-                download=False,
-                transform=transform,
-                target_transform=_to_scalar_label,
-                size=self.size,
-            )
+            kwargs: dict[str, Any] = {
+                "split": split,
+                "root": self.data_dir,
+                "download": False,
+                "transform": _volume_to_channels if self.is_3d else transform,
+                "target_transform": self._target_transform(),
+            }
+            # Os 3D não aceitam `size`: só existem em 28³.
+            if not self.is_3d:
+                kwargs["size"] = self.size
+            return cls(**kwargs)
 
         self.train_dataset = build("train", tfm_aug)
         self.val_dataset = build("val", tfm_plain)

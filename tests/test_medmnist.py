@@ -10,10 +10,22 @@ import pytest
 from medmnist import INFO
 
 from cvlab.data.med_mnist import (
+    MULTILABEL_SUBSETS,
+    SINGLE_LABEL_2D,
     SUPPORTED_SUBSETS,
+    VOLUMETRIC_SUBSETS,
     MedMNISTDataModule,
+    _to_multilabel,
     _to_scalar_label,
+    _volume_to_channels,
 )
+
+
+def test_multilabel_and_3d_are_supported() -> None:
+    """As três famílias entram pela mesma classe parametrizada."""
+    assert "chestmnist" in MULTILABEL_SUBSETS
+    assert len(VOLUMETRIC_SUBSETS) == 6
+    assert len(SUPPORTED_SUBSETS) == 18
 
 
 def test_metadata_comes_from_info() -> None:
@@ -41,27 +53,58 @@ def test_class_names_follow_label_index_order() -> None:
 
 
 @pytest.mark.parametrize("subset", SUPPORTED_SUBSETS)
-def test_all_supported_subsets_instantiate(subset: str) -> None:
-    """Os 11 subsets em escopo constroem sem download e são single-label."""
+def test_all_subsets_instantiate(subset: str) -> None:
+    """Os 18 subsets constroem sem download, com mean/std do tamanho certo."""
     dm = MedMNISTDataModule(subset=subset, data_dir="./data")
     assert dm.num_classes >= 2
-    assert dm.in_channels in (1, 3)
-    assert "multi-label" not in dm.task
     assert len(dm.mean) == dm.in_channels
     assert len(dm.std) == dm.in_channels
 
 
-def test_chestmnist_rejected_with_reason() -> None:
-    """chestmnist é multi-label: deve falhar no __init__, não no meio do treino."""
-    with pytest.raises(ValueError, match="multi-label"):
-        MedMNISTDataModule(subset="chestmnist")
+@pytest.mark.parametrize("subset", SINGLE_LABEL_2D)
+def test_single_label_2d_shape(subset: str) -> None:
+    dm = MedMNISTDataModule(subset=subset, data_dir="./data")
+    assert dm.in_channels in (1, 3)
+    assert not dm.is_3d and not dm.is_multilabel
 
 
-@pytest.mark.parametrize("subset", ["organmnist3d", "nodulemnist3d", "synapsemnist3d"])
-def test_3d_subsets_rejected_with_reason(subset: str) -> None:
-    """Os volumétricos não passam por Conv2d: erro explícito citando o motivo."""
-    with pytest.raises(ValueError, match="volumétrico"):
-        MedMNISTDataModule(subset=subset)
+def test_chestmnist_is_multilabel() -> None:
+    """14 achados que coexistem: exige BCEWithLogitsLoss, não CrossEntropy."""
+    dm = MedMNISTDataModule(subset="chestmnist", data_dir="./data")
+    assert dm.is_multilabel
+    assert dm.num_classes == 14
+    assert dm._target_transform() is _to_multilabel
+
+
+@pytest.mark.parametrize("subset", VOLUMETRIC_SUBSETS)
+def test_volumetric_uses_slices_as_channels(subset: str) -> None:
+    """As 28 fatias viram canais, o que permite reusar as arquiteturas Conv2d."""
+    dm = MedMNISTDataModule(subset=subset, data_dir="./data")
+    assert dm.is_3d
+    assert dm.in_channels == 28
+    # Augmentation 2D não se aplica a um tensor de canais.
+    assert dm._augment_ops() == []
+
+
+def test_volumetric_rejects_other_resolutions() -> None:
+    """Os 3D só existem em 28³; pedir outra resolução tem que falhar cedo."""
+    with pytest.raises(ValueError, match="28"):
+        MedMNISTDataModule(subset="organmnist3d", size=64)
+
+
+def test_volume_to_channels_squeezes_and_normalizes() -> None:
+    import numpy as np
+
+    vol = np.full((1, 28, 28, 28), 255, dtype=np.uint8)
+    t = _volume_to_channels(vol)
+    assert tuple(t.shape) == (28, 28, 28)
+    assert float(t.max()) == 1.0
+
+
+def test_multilabel_target_is_float_vector() -> None:
+    t = _to_multilabel([0, 1, 1, 0])
+    assert tuple(t.shape) == (4,)
+    assert t.dtype.is_floating_point
 
 
 def test_unknown_subset_rejected() -> None:
