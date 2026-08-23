@@ -48,6 +48,27 @@ notebooks separados nunca deram.
 Cada artefato carrega `schema_version`. O leitor R **recusa** o que não
 reconhece, em vez de interpretar errado em silêncio.
 
+### A coluna `acc` é sempre acurácia simples
+
+Em todo split, `acc` é a fração de exemplos corretos (micro) — o mesmo número que
+`summary_metrics()` recomputa das predições, e o mesmo ACC que o benchmark
+oficial do MedMNIST reporta. Acurácia balanceada, F1, AUC e kappa saem da
+`predictions.csv.gz` no lado R, nunca da coluna `acc`.
+
+Isso já foi diferente, e o conserto é o motivo de a regra estar escrita aqui: a
+acurácia de validação vinha de `torchmetrics.MulticlassAccuracy`, cujo default de
+`average` é `"macro"`, enquanto a de teste era calculada como micro. As duas
+ocupavam a coluna `acc`, e `paired_accuracies()` comparava uma com a outra. No
+fixture do BreastMNIST a diferença chegava a 20 pontos. O teste
+`test-io.R::"a coluna acc é a MESMA métrica em val e em test"` recomputa as duas
+das predições e é a trava contra a reincidência.
+
+O critério de **seleção** é outra coisa, declarada em `tuning.objective`
+(`accuracy` ou `balanced_accuracy`) e registrada no `manifest.json` junto de
+`baseline_val_score_mean`/`best_val_score_mean`. Com `balanced_accuracy` a config
+vencedora pode ter `acc` menor que a perdedora — o relatório precisa ler o
+`objective` para explicar isso.
+
 ## Uso
 
 ```bash
@@ -72,13 +93,45 @@ xdg-open analysis/output/report.html
 Para editar o `.qmd` com recarga automática, `just report-preview` sobe um
 servidor local e re-renderiza a cada save.
 
+## Notebooks
+
+Exploração livre em `notebooks/`, em `.ipynb` com kernel R. São **consumidores**:
+leem artefatos e nunca produzem nenhum. Quem produz é sempre o `just`.
+
+```bash
+just nb          # JupyterLab com o kernel R
+just nb-sync     # propaga edições entre .ipynb e .Rmd
+just nb-run      # reexecuta todos, regenerando as saídas
+```
+
+Cada `.ipynb` é pareado pelo jupytext com um `.Rmd` de mesmo nome. O `.ipynb`
+guarda as saídas, que é o que faz o GitHub renderizar a análise para quem só
+abre o link; o `.Rmd` é o espelho em texto, onde o diff fica legível e o merge é
+possível. Os dois são versionados.
+
+### Kernel fora do devShell (VS Code, RStudio)
+
+O flake registra o kernel via `JUPYTER_PATH`, o que só vale **dentro** do
+`nix develop`. Um editor lançado fora dele não enxerga o kernel e a lista aparece
+sem o R. Uma vez, por clone:
+
+```bash
+just nb-kernel
+```
+
+Isso grava um kernelspec em `~/.local/share/jupyter/kernels/cvlab-r/` cujo
+`argv` chama `nix develop` no próprio repositório. Assim o R é resolvido a cada
+execução, e atualizar o flake não quebra o kernel.
+
 ### Ferramentas fora do justfile (`quarto preview`, VS Code, RStudio)
 
 As recipes entram no devShell sozinhas, mas ferramentas que **não** passam pelo
 `just` — a extensão Quarto do VS Code, um `quarto preview` digitado à mão, o
 RStudio — rodam no ambiente do editor e não encontram o R.
 
-A solução é o `direnv`, que já vem configurado no `.envrc` do repositório:
+Para o **kernel** dos notebooks, `just nb-kernel` resolve. Para o resto (LSP do
+R, `quarto preview`, terminal R), a solução é o `direnv`, já configurado no
+`.envrc` do repositório:
 
 ```bash
 direnv allow    # uma vez, no clone
@@ -87,6 +140,11 @@ direnv allow    # uma vez, no clone
 A partir daí o devShell é ativado ao entrar no diretório, e qualquer ferramenta
 lançada dali enxerga o R e os pacotes. Sem isso, o Quarto falha com
 `Unable to locate an installed version of R`.
+
+No VS Code isso exige duas extensões: `REditorSupport.r` (suporte a R, que usa o
+`languageserver` do flake) e `mkhl.direnv` (injeta o ambiente na janela). A
+alternativa sem a segunda é abrir o editor com `code .` de um terminal onde o
+direnv já ativou.
 
 Todas aceitam um segundo argumento com a raiz de resultados, **relativa à raiz do
 repositório**, para analisar artefatos que não estão em `results/`:

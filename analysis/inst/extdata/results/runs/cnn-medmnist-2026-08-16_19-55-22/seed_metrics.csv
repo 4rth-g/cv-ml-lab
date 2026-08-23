@@ -1,9 +1,0 @@
-run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,baseline,42,42,official,val,0.5
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,baseline,42,42,official,test,0.7307692307692307
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,baseline,43,42,official,val,0.5388471484184265
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,baseline,43,42,official,test,0.6987179487179487
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,tuned,42,42,official,val,0.5
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,tuned,42,42,official,test,0.7307692307692307
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,tuned,43,42,official,val,0.5388471484184265
-cnn-medmnist-2026-08-16_19-55-22,cnn,medmnist,breastmnist,smoke,tuned,43,42,official,test,0.6987179487179487

@@ -78,6 +78,33 @@ INDEX_COLUMNS = (
 
 TRIAL_COLUMNS = ("trial_number", "state", "value", "duration_s", "params_json")
 
+EPOCH_COLUMNS = (
+    "run_id",
+    "arm",
+    "seed_init",
+    "epoch",
+    "train_loss",
+    "train_acc",
+    "val_loss",
+    "val_acc",
+    "lr",
+)
+
+#: Probabilidade por classe, uma linha por (arm, seed, split, exemplo, classe).
+#:
+#: Formato longo em vez de uma coluna por classe: o número de classes varia entre
+#: datasets (2 no BreastMNIST, 11 no OrganAMNIST), e um schema de largura variável
+#: obrigaria o leitor R a descobrir as colunas em tempo de execução.
+PROBABILITY_COLUMNS = (
+    "run_id",
+    "arm",
+    "seed_init",
+    "split",
+    "example_idx",
+    "class_idx",
+    "prob",
+)
+
 
 def _atomic_write(path: Path, write_body: Any, *, gzipped: bool = False) -> None:
     """Escreve via ``.tmp`` + ``os.replace`` (atômico no mesmo filesystem)."""
@@ -203,12 +230,39 @@ def export_run_artifacts(
 
     _write_csv(run_dir / "predictions.csv.gz", PREDICTION_COLUMNS, prediction_rows(), gzipped=True)
 
-    # 3. trials.csv (histórico da busca; insumo da curva de performance esperada
+    # 3. epochs.csv (curvas de aprendizado). Antes essas métricas só existiam no
+    #    W&B, o que tornava a curva de treino irreproduzível a partir do repo.
+    epoch_rows = [{"run_id": run_id, **row} for row in res.get("epoch_rows", [])]
+    if epoch_rows:
+        _write_csv(run_dir / "epochs.csv", EPOCH_COLUMNS, epoch_rows)
+
+    # 4. probabilities.csv.gz. Sem probabilidade não há AUC, ROC, curva
+    #    precisão-recall nem calibração, e o benchmark oficial do MedMNIST
+    #    reporta AUC junto da acurácia — sem isto não há comparação possível
+    #    com o publicado.
+    def probability_rows() -> Iterable[dict[str, Any]]:
+        for entry in res["predictions"]:
+            for idx, row in enumerate(entry.get("probs") or []):
+                for class_idx, prob in enumerate(row):
+                    yield {
+                        "run_id": run_id,
+                        "arm": entry["arm"],
+                        "seed_init": entry["seed_init"],
+                        "split": entry["split"],
+                        "example_idx": idx,
+                        "class_idx": class_idx,
+                        "prob": prob,
+                    }
+
+    if any(entry.get("probs") for entry in res["predictions"]):
+        _write_csv(run_dir / "probabilities.csv.gz", PROBABILITY_COLUMNS, probability_rows(), gzipped=True)
+
+    # 5. trials.csv (histórico da busca; insumo da curva de performance esperada
     #    por orçamento — reportar o máximo de uma busca é estimador enviesado)
     if study is not None:
         _write_csv(run_dir / "trials.csv", TRIAL_COLUMNS, _trial_rows(study))
 
-    # 4. manifest.json
+    # 6. manifest.json
     timestamp = datetime.now(UTC).isoformat()
     commit = git_commit()
     manifest = {
@@ -232,6 +286,13 @@ def export_run_artifacts(
         "accelerator": str(cfg.trainer.get("accelerator", "auto")),
         "baseline_config": res["baseline_config"],
         "tuned_config": res["best_config"],
+        # Em que métrica a seleção foi feita. Sem isto o relatório não consegue
+        # explicar por que a config vencedora pode ter acurácia REPORTADA menor
+        # que a perdedora quando o objetivo é `balanced_accuracy` — a coluna
+        # `acc` é sempre micro, o critério nem sempre. Ver `cvlab.metrics`.
+        "objective": res.get("objective", "accuracy"),
+        "baseline_val_score_mean": res.get("baseline_val_score_mean"),
+        "best_val_score_mean": res.get("best_val_score_mean"),
         "search_best_val_acc": float(study.best_value) if study is not None else None,
         "selected_arm": res["selected_arm"],
         "selected_label": res["selected_name"],
@@ -248,7 +309,7 @@ def export_run_artifacts(
 
     _atomic_write(run_dir / "manifest.json", manifest_body)
 
-    # 5. index.csv (append-only; é o que viabiliza análise ENTRE runs — Friedman
+    # 7. index.csv (append-only; é o que viabiliza análise ENTRE runs — Friedman
     #    sobre datasets — sem abrir N manifests)
     _append_index(
         root / "index.csv",

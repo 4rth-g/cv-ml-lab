@@ -46,6 +46,31 @@ test_that("seed_metrics tem uma linha por (arm, seed, split)", {
   expect_true(all(sm$acc >= 0 & sm$acc <= 1))
 })
 
+test_that("a coluna acc é a MESMA métrica em val e em test", {
+  # A trava do bug que motivou a correção. `val_acc` vinha de
+  # torchmetrics::MulticlassAccuracy, cujo `average` default é "macro", enquanto
+  # `test_acc` era np.mean(preds == targets), micro. As duas ocupavam a coluna
+  # `acc`, e daí `paired_accuracies()` comparava val (balanceada) com test
+  # (simples) como se fossem a mesma quantidade. No fixture antigo do
+  # BreastMNIST a divergência era de 0,74 contra 0,54 — 20 pontos.
+  #
+  # Este teste NÃO confia na coluna: recomputa a acurácia das predições
+  # exportadas e exige que bata nos dois splits. É a única checagem que amarra
+  # o produtor (cvlab.export) ao leitor sem depender de o produtor se descrever
+  # corretamente.
+  run <- read_run(fixture_run_id(), fixture_root())
+  met <- run_metrics(run)
+
+  comparado <- merge(
+    run$seed_metrics[, c("arm", "seed_init", "split", "acc")],
+    met[, c("arm", "seed_init", "split", "accuracy", "balanced_accuracy")],
+    by = c("arm", "seed_init", "split")
+  )
+
+  expect_equal(nrow(comparado), nrow(run$seed_metrics))
+  expect_equal(comparado$acc, comparado$accuracy, tolerance = 1e-6)
+})
+
 test_that("as três colunas de seed estão presentes e separadas", {
   sm <- read_run(fixture_run_id(), fixture_root())$seed_metrics
   expect_true(all(c("seed_init", "seed_data", "seed_split") %in% names(sm)))
@@ -106,4 +131,17 @@ test_that("métricas pós-hoc saem das predições sem retreinar", {
   # diagnóstico que exigiria um retreino se as predições não fossem exportadas.
   test_rows <- met[met$split == "test", ]
   expect_true(all(test_rows$balanced_accuracy <= test_rows$accuracy))
+})
+
+test_that("class_name é lido como rótulo, nunca como número", {
+  # Em MNIST e Fashion-MNIST as classes se chamam "0".."9". Se o readr as
+  # inferir como numeric, `lm(x ~ class_name)` deixa de ser ANOVA e vira
+  # regressão linear no valor do dígito, sem erro nenhum: o R² só fica errado.
+  eda <- read_dataset_eda("medmnist-breastmnist-28", fixture_root())
+  expect_type(eda$examples$class_name, "character")
+
+  # O join herda o tipo corrigido.
+  run <- read_run(fixture_run_id(), fixture_root())
+  joined <- join_predictions_eda(run, root = fixture_root())
+  expect_type(joined$class_name, "character")
 })

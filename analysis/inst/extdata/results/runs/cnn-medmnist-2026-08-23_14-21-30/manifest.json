@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "run_id": "cnn-medmnist-2026-08-16_19-55-22",
-  "timestamp_utc": "2026-08-16T22:55:29.317789+00:00",
-  "commit": "a7742df-dirty",
+  "run_id": "cnn-medmnist-2026-08-23_14-21-30",
+  "timestamp_utc": "2026-08-23T17:21:39.406908+00:00",
+  "commit": "3379962-dirty",
   "model": "cnn",
   "dataset": "medmnist",
   "subset": "breastmnist",
@@ -24,7 +24,7 @@
   ],
   "n_val": 78,
   "n_test": 156,
-  "accelerator": "auto",
+  "accelerator": "cpu",
   "baseline_config": {
     "_target_": "cvlab.models.cnn.ConfigurableCNN",
     "num_filters": 32,
@@ -47,7 +47,10 @@
     "optimizer": "adam",
     "weight_decay": 1e-06
   },
-  "search_best_val_acc": 0.6102756857872009,
+  "objective": "accuracy",
+  "baseline_val_score_mean": 0.7371794871794872,
+  "best_val_score_mean": 0.7371794871794872,
+  "search_best_val_acc": 0.7820512652397156,
   "selected_arm": "tuned",
   "selected_label": "melhor config (Optuna)",
   "tuned_ge_baseline": true,

@@ -30,9 +30,34 @@ import numpy as np
 import torch
 
 from cvlab.data.base import BaseImageClfDataModule
+from cvlab.metrics import accuracy, objective_metric_key, objective_score
 from cvlab.models.factory import build_model, lit_params
 from cvlab.models.lit_module import LitClassifier
 from cvlab.xpu import build_trainer
+
+
+@dataclass(frozen=True)
+class SingleRunResult:
+    """Resultado de um treino, com a métrica de RELATÓRIO separada da de SELEÇÃO.
+
+    A separação é o conserto de um bug: ``val_acc`` vinha do torchmetrics (macro,
+    por causa do default de ``average``) e ``test_acc`` era calculado à mão
+    (micro), e ambos iam para a mesma coluna ``acc`` do export. Agora ``val_acc``
+    e ``test_acc`` são a MESMA função (:func:`cvlab.metrics.accuracy`) nos dois
+    splits, e o que decide é ``val_score`` — outro campo, outro nome, outra
+    métrica possível. Ver `cvlab.metrics`.
+
+    ``val_score`` nunca é exportado como acurácia; ele aparece no manifest junto
+    do nome do objetivo, para que o relatório possa dizer em que critério a
+    seleção foi feita.
+    """
+
+    val_acc: float
+    test_acc: float
+    val_score: float
+    model: L.LightningModule
+    per_split: dict[str, dict[str, list]]
+    epoch_rows: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -82,6 +107,18 @@ def plan_run_seeds(cfg: Any, n_seeds: int) -> list[RunSeeds]:
     ]
 
 
+def objective_of(cfg: Any) -> str:
+    """Lê a métrica de seleção de ``cfg.tuning.objective``, com default ``accuracy``.
+
+    O default preserva o protocolo histórico. Datasets desbalanceados
+    (DermaMNIST, razão 58,7) devem rodar com ``balanced_accuracy``: é uma
+    escolha de critério, e ela vai ao manifest para que o relatório possa
+    declará-la.
+    """
+    tuning = cfg.get("tuning", {}) if hasattr(cfg, "get") else {}
+    return str(tuning.get("objective", "accuracy") or "accuracy")
+
+
 def _seed_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Achata os runs em formato longo: uma linha por (arm, seed, split).
 
@@ -107,20 +144,32 @@ def _seed_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, An
     return rows
 
 
+def _epoch_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Métricas por época em formato longo: uma linha por (arm, seed, época)."""
+    rows: list[dict[str, Any]] = []
+    for arm, runs in (("baseline", baseline_runs), ("tuned", best_runs)):
+        for r in runs:
+            rs: RunSeeds = r["seeds"]
+            for e in r.get("epochs", []):
+                rows.append({"arm": arm, "seed_init": rs.init, **e})
+    return rows
+
+
 def _prediction_rows(baseline_runs: list[dict[str, Any]], best_runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Predições por exemplo de cada (arm, seed, split), prontas para o export."""
     out: list[dict[str, Any]] = []
     for arm, runs in (("baseline", baseline_runs), ("tuned", best_runs)):
         for r in runs:
             rs: RunSeeds = r["seeds"]
-            for split, (preds, targets) in r["per_split"].items():
+            for split, payload in r["per_split"].items():
                 out.append(
                     {
                         "arm": arm,
                         "seed_init": rs.init,
                         "split": split,
-                        "preds": preds,
-                        "targets": targets,
+                        "preds": payload["preds"],
+                        "targets": payload["targets"],
+                        "probs": payload["probs"],
                     }
                 )
     return out
@@ -133,12 +182,20 @@ def _train_single_run(
     epochs: int,
     accelerator: str = "auto",
     pl_logger: Any = None,
-) -> tuple[float, float, L.LightningModule, dict[str, tuple[list[int], list[int]]]]:
+    objective: str = "accuracy",
+) -> SingleRunResult:
     """Treina uma vez no split completo e avalia no teste, com early stopping por validação.
 
-    Restaura os pesos da época de melhor ``val_acc`` (via ``BestValRestoreCallback``)
-    antes de avaliar — assim o resultado reportado é o do melhor ponto segundo a
-    validação, não o da última época (que pode já estar em overfitting).
+    Restaura os pesos da melhor época segundo ``objective`` (via
+    ``BestValRestoreCallback``) antes de avaliar — assim o resultado reportado é
+    o do melhor ponto segundo a validação, não o da última época (que pode já
+    estar em overfitting).
+
+    As acurácias devolvidas são recomputadas das PREDIÇÕES do modelo restaurado,
+    não lidas de ``callback_metrics``. É o que garante que ``val`` e ``test``
+    sejam a mesma função (:func:`cvlab.metrics.accuracy`) e que a coluna ``acc``
+    do export bata com o que ``analysis/R/metrics.R`` recomputa das mesmas
+    predições — antes, val vinha do torchmetrics em macro e test era micro.
 
     Args:
         config: Configuração achatada com ``_target_`` + hiperparâmetros de
@@ -151,11 +208,14 @@ def _train_single_run(
         pl_logger: Logger opcional do Lightning (ex.: W&B) para registrar curvas por
             época. ``None`` desliga o logging (usado no multi-seed, que só coleta
             métricas finais).
+        objective: Métrica de seleção (``accuracy`` ou ``balanced_accuracy``).
+            Decide qual época restaurar e alimenta ``val_score``; não afeta
+            ``val_acc``/``test_acc``.
 
     Returns:
-        tuple: ``(test_acc, best_val_acc, model, per_split)`` — onde ``per_split``
-        mapeia ``"val"``/``"test"`` para ``(preds, true_labels)`` por exemplo, e
-        ``model`` já tem os pesos da melhor época.
+        SingleRunResult: acurácias de relatório, score de seleção, o modelo já com
+        os pesos da melhor época, as predições por exemplo de cada split e uma
+        linha por época com loss, acurácia e learning rate.
     """
     L.seed_everything(seeds.init, workers=True)
     datamodule.configure_run_seeds(split_seed=seeds.split, data_seed=seeds.data)
@@ -169,6 +229,7 @@ def _train_single_run(
     lit_module = LitClassifier(
         model=model,
         num_classes=datamodule.num_classes,
+        multilabel=bool(getattr(datamodule, "is_multilabel", False)),
         **lit_params(config),
     )
 
@@ -176,11 +237,16 @@ def _train_single_run(
     val_dl = datamodule.val_dataloader()
     test_dl = datamodule.test_dataloader()
 
-    best_val_acc = 0.0
+    # A época é escolhida pela MESMA métrica que escolhe a config
+    # (`tuning.objective`). Fixar isto em `val_acc` faria o early stopping
+    # otimizar micro enquanto a seleção final otimizava macro — duas decisões
+    # em critérios diferentes dentro do mesmo run.
+    best_epoch_key = objective_metric_key(objective, "val")
+    best_epoch_score = -1.0
     best_state: dict[str, torch.Tensor] | None = None
 
     class BestValRestoreCallback(L.Callback):
-        """Guarda uma cópia dos pesos na época de melhor val_acc (early stopping).
+        """Guarda uma cópia dos pesos na melhor época segundo o objetivo (early stopping).
 
         Não interrompe o treino; apenas mantém o melhor snapshot em CPU. Ao final,
         `_train_single_run` recarrega esse estado, então a avaliação no teste
@@ -188,11 +254,47 @@ def _train_single_run(
         """
 
         def on_validation_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
-            nonlocal best_val_acc, best_state
-            val_acc = float(trainer.callback_metrics.get("val_acc", 0.0))
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+            nonlocal best_epoch_score, best_state
+            score = float(trainer.callback_metrics.get(best_epoch_key, 0.0))
+            if score > best_epoch_score:
+                best_epoch_score = score
                 best_state = {k: v.detach().cpu().clone() for k, v in pl_module.state_dict().items()}
+
+    # Métricas por época. O treino só as mandava para o W&B, então elas não
+    # existiam no contrato de artefatos e a curva de aprendizado — o diagnóstico
+    # mais direto de overfitting, underfitting e LR errado — era impossível de
+    # reproduzir fora do W&B.
+    epoch_rows: list[dict[str, Any]] = []
+
+    class EpochMetricsCallback(L.Callback):
+        """Coleta loss, acurácia e LR ao fim de cada época de TREINO.
+
+        O hook é `on_train_epoch_end`, e não `on_validation_end`, porque o loop de
+        validação roda ANTES da agregação das métricas de treino: colher ali
+        deixava `train_loss` vazio na primeira época e defasado de uma época em
+        todas as seguintes. Aqui as duas metades já estão em `callback_metrics`.
+        """
+
+        def on_train_epoch_end(self, trainer: L.Trainer, pl_module: L.LightningModule) -> None:
+            if trainer.sanity_checking:
+                return
+            m = trainer.callback_metrics
+
+            def get(key: str) -> float | None:
+                v = m.get(key)
+                return float(v) if v is not None else None
+
+            lrs = [g["lr"] for g in trainer.optimizers[0].param_groups] if trainer.optimizers else []
+            epoch_rows.append(
+                {
+                    "epoch": int(trainer.current_epoch),
+                    "train_loss": get("train_loss"),
+                    "train_acc": get("train_acc"),
+                    "val_loss": get("val_loss"),
+                    "val_acc": get("val_acc"),
+                    "lr": float(lrs[0]) if lrs else None,
+                }
+            )
 
     trainer = build_trainer(
         accelerator,
@@ -200,7 +302,7 @@ def _train_single_run(
         enable_checkpointing=False,
         logger=pl_logger if pl_logger is not None else False,
         enable_progress_bar=False,
-        callbacks=[BestValRestoreCallback()],
+        callbacks=[BestValRestoreCallback(), EpochMetricsCallback()],
     )
 
     trainer.fit(lit_module, train_dataloaders=train_dl, val_dataloaders=val_dl)
@@ -215,22 +317,42 @@ def _train_single_run(
     # precise olhar o teste.
     lit_module.eval()
     device = lit_module.device
-    per_split: dict[str, tuple[list[int], list[int]]] = {}
+    per_split: dict[str, dict[str, list]] = {}
 
     for split_name, loader in (("val", val_dl), ("test", test_dl)):
         preds_out: list[int] = []
         targets_out: list[int] = []
+        probs_out: list[list[float]] = []
         with torch.no_grad():
             for x, y in loader:
                 x = x.to(device)
                 logits = lit_module(x)
+                # Probabilidade, e não só o argmax. É o que habilita AUC, ROC,
+                # curva precisão-recall e calibração — nenhuma delas é
+                # recuperável a partir da classe predita. Importa em particular
+                # porque o benchmark oficial do MedMNIST reporta AUC junto da
+                # acurácia, então sem isto não há como comparar com o publicado.
+                probs = torch.softmax(logits, dim=1)
                 preds_out.extend(torch.argmax(logits, dim=1).cpu().tolist())
+                probs_out.extend([[round(float(v), 5) for v in row] for row in probs.cpu()])
                 targets_out.extend(y.tolist())
-        per_split[split_name] = (preds_out, targets_out)
+        per_split[split_name] = {"preds": preds_out, "targets": targets_out, "probs": probs_out}
 
-    test_preds, test_targets = per_split["test"]
-    test_acc = float(np.mean(np.array(test_preds) == np.array(test_targets)))
-    return test_acc, best_val_acc, lit_module, per_split
+    # Ambas as acurácias saem da MESMA função, sobre as predições do modelo
+    # restaurado. Ler a de validação de `callback_metrics` era o bug: aquele
+    # valor era macro e este é micro, e os dois iam para a coluna `acc`.
+    val_acc = accuracy(per_split["val"]["preds"], per_split["val"]["targets"])
+    test_acc = accuracy(per_split["test"]["preds"], per_split["test"]["targets"])
+    val_score = objective_score(per_split["val"]["preds"], per_split["val"]["targets"], objective)
+
+    return SingleRunResult(
+        val_acc=val_acc,
+        test_acc=test_acc,
+        val_score=val_score,
+        model=lit_module,
+        per_split=per_split,
+        epoch_rows=epoch_rows,
+    )
 
 
 def train_final(
@@ -257,10 +379,16 @@ def train_final(
     """
     accelerator = cfg.trainer.get("accelerator", "auto")
     base_seeds = RunSeeds(init=cfg.seed, data=cfg.seed, split=cfg.seed)
-    test_acc, val_acc, model, _ = _train_single_run(
-        config, base_seeds, datamodule, cfg.tuning.final_epochs, accelerator=accelerator, pl_logger=pl_logger
+    run = _train_single_run(
+        config,
+        base_seeds,
+        datamodule,
+        cfg.tuning.final_epochs,
+        accelerator=accelerator,
+        pl_logger=pl_logger,
+        objective=objective_of(cfg),
     )
-    return model, val_acc, test_acc
+    return run.model, run.val_acc, run.test_acc
 
 
 def rigorous_compare(
@@ -280,9 +408,11 @@ def rigorous_compare(
     2. **Coleta de evidência**: acurácia por seed e predições por exemplo, de
        validação e teste, no formato que `cvlab.export` grava. Nenhuma
        estatística inferencial é computada aqui.
-    3. **Seleção na validação**: a tunada só é escolhida se
-       ``best_val_mean >= baseline_val_mean``; caso contrário, *fallback* para a
-       baseline. O conjunto de teste nunca entra na decisão.
+    3. **Seleção na validação**: a tunada só é escolhida se a média do
+       ``val_score`` (métrica de ``cfg.tuning.objective``) empatar ou superar a
+       da baseline; caso contrário, *fallback* para a baseline. O conjunto de
+       teste nunca entra na decisão. A acurácia REPORTADA (``acc`` no export) é
+       sempre micro e independe do objetivo — ver `cvlab.metrics`.
 
     Args:
         baseline_cfg: Configuração baseline (com ``_target_``).
@@ -303,6 +433,7 @@ def rigorous_compare(
     final_epochs = cfg.tuning.final_epochs
     seeds = plan_run_seeds(cfg, n_seeds)
     accelerator = cfg.trainer.get("accelerator", "auto")
+    objective = objective_of(cfg)
 
     # Um "arm" é um lado da comparação. As MESMAS seeds nos dois → amostras
     # pareadas (um par baseline/tunada por seed), que é o que cancela o ruído
@@ -311,11 +442,18 @@ def rigorous_compare(
         runs: list[dict[str, Any]] = []
         models: list[Any] = []
         for rs in seeds:
-            test_acc, val_acc, model, per_split = _train_single_run(
-                config, rs, datamodule, final_epochs, accelerator=accelerator
+            run = _train_single_run(config, rs, datamodule, final_epochs, accelerator=accelerator, objective=objective)
+            runs.append(
+                {
+                    "seeds": rs,
+                    "val_acc": run.val_acc,
+                    "test_acc": run.test_acc,
+                    "val_score": run.val_score,
+                    "per_split": run.per_split,
+                    "epochs": run.epoch_rows,
+                }
             )
-            runs.append({"seeds": rs, "val_acc": val_acc, "test_acc": test_acc, "per_split": per_split})
-            models.append(model)
+            models.append(run.model)
         return runs, models
 
     baseline_runs, baseline_models = run_arm(baseline_cfg)
@@ -325,6 +463,13 @@ def rigorous_compare(
     best_val_arr = np.array([r["val_acc"] for r in best_runs])
     baseline_test_arr = np.array([r["test_acc"] for r in baseline_runs])
     best_test_arr = np.array([r["test_acc"] for r in best_runs])
+
+    # As acurácias acima são as REPORTADAS (micro, iguais às do export). Os
+    # scores abaixo são os que DECIDEM. Com `objective=accuracy` os dois
+    # coincidem; com `balanced_accuracy` não, e é por isso que são arrays
+    # distintos em vez de um só reaproveitado.
+    baseline_score_arr = np.array([r["val_score"] for r in baseline_runs])
+    best_score_arr = np.array([r["val_score"] for r in best_runs])
 
     baseline_val_mean = float(baseline_val_arr.mean())
     best_val_mean = float(best_val_arr.mean())
@@ -344,14 +489,16 @@ def rigorous_compare(
 
     # Índice da seed de melhor VALIDAÇÃO de cada lado (nunca a de melhor teste →
     # seria vazamento). Serve para dois fins: escolher o modelo entregue, e
-    # registrar no manifest qual par o McNemar deve usar do lado do R.
-    best_baseline_idx = int(np.argmax(baseline_val_arr))
-    best_tuned_idx = int(np.argmax(best_val_arr))
+    # registrar no manifest qual par o McNemar deve usar do lado do R. Usa o
+    # score de objetivo, o mesmo critério da seleção — senão o modelo entregue
+    # seria o melhor numa métrica e a config, a melhor em outra.
+    best_baseline_idx = int(np.argmax(baseline_score_arr))
+    best_tuned_idx = int(np.argmax(best_score_arr))
 
     # Seleção NA VALIDAÇÃO (nunca no teste): a tunada só vence se empatar ou superar
     # a baseline na validação média. Senão, fallback p/ baseline — o guard-rail que
     # impede reportar algo pior que a baseline mesmo quando a busca "achou" outra coisa.
-    tuned_ge_baseline = bool(best_val_mean >= baseline_val_mean)
+    tuned_ge_baseline = bool(float(best_score_arr.mean()) >= float(baseline_score_arr.mean()))
     if tuned_ge_baseline:
         selected_name = "melhor config (Optuna)"
         selected_config = best_cfg
@@ -363,7 +510,14 @@ def rigorous_compare(
 
     return {
         "n_seeds": n_seeds,
+        # O relatório precisa dizer em que métrica a seleção foi feita: com
+        # `balanced_accuracy` a config vencedora pode ter acurácia REPORTADA
+        # menor que a perdedora, e sem esta linha isso pareceria um erro.
+        "objective": objective,
+        "baseline_val_score_mean": float(baseline_score_arr.mean()),
+        "best_val_score_mean": float(best_score_arr.mean()),
         "seed_rows": _seed_rows(baseline_runs, best_runs),
+        "epoch_rows": _epoch_rows(baseline_runs, best_runs),
         "predictions": _prediction_rows(baseline_runs, best_runs),
         "mcnemar_baseline_seed": baseline_runs[best_baseline_idx]["seeds"].init,
         "mcnemar_tuned_seed": best_runs[best_tuned_idx]["seeds"].init,
