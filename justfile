@@ -206,8 +206,9 @@ report-preview run="latest" results_dir="results": (preflight results_dir "repor
 # --- Notebooks (.ipynb com kernel R) --------------------------------------
 # Exploração livre, que CONSOME artefatos e nunca produz nenhum. Quem produz é
 # sempre o `just`. Os .ipynb são versionados COM saídas, porque é isso que faz o
-# GitHub renderizar a análise para quem só abre o link; o .Rmd pareado pelo
-# jupytext é o espelho em texto onde o diff fica legível.
+# GitHub renderizar a análise para quem só abre o link. O custo é diff ilegível:
+# o pareamento com .Rmd via jupytext, que resolveria isso, foi removido porque o
+# VS Code lê mal o formato.
 
 # JupyterLab com o kernel R (cvlab)
 nb:
