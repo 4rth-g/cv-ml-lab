@@ -38,17 +38,29 @@ per_class_metrics <- function(y_true, y_pred, class_names = NULL) {
     tp <- sum(y_true == k & y_pred == k)
     fp <- sum(y_true != k & y_pred == k)
     fn <- sum(y_true == k & y_pred != k)
-    precision <- if ((tp + fp) > 0) tp / (tp + fp) else NA_real_
-    recall <- if ((tp + fn) > 0) tp / (tp + fn) else NA_real_
-    f1 <- if (!is.na(precision) && !is.na(recall) && (precision + recall) > 0) {
+    support <- tp + fn
+
+    # Convenção zero_division=0, a mesma do scikit-learn. Uma classe que EXISTE
+    # nos rótulos mas nunca é predita tem precisão indefinida (0/0). Devolver NA
+    # aqui era um bug grave: o `na.rm = TRUE` da média macro descartava a classe,
+    # e um modelo que prevê só a majoritária num problema binário reportava F1
+    # macro de 0,84 em vez de 0,42. Precisão 0 e F1 0 mantêm a classe na conta.
+    #
+    # NA fica reservado para a classe que não aparece nos rótulos: aí não há o
+    # que avaliar, e incluí-la como 0 puniria o modelo por algo inexistente.
+    precision <- if ((tp + fp) > 0) tp / (tp + fp) else if (support > 0) 0 else NA_real_
+    recall <- if (support > 0) tp / support else NA_real_
+    f1 <- if (is.na(precision) || is.na(recall)) {
+      NA_real_
+    } else if ((precision + recall) > 0) {
       2 * precision * recall / (precision + recall)
     } else {
-      NA_real_
+      0
     }
     data.frame(
       class_idx = k,
       class_name = if (is.null(class_names)) as.character(k) else class_names[k + 1L],
-      support = sum(y_true == k),
+      support = support,
       precision = precision,
       recall = recall,
       f1 = f1

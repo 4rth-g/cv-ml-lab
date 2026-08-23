@@ -17,7 +17,7 @@ from typing import Any
 from hydra.utils import instantiate
 from torch import nn
 
-_LIT_KEYS = ("lr", "optimizer", "weight_decay", "scheduler")
+_LIT_KEYS = ("lr", "optimizer", "weight_decay", "scheduler", "multilabel")
 _LOADER_KEYS = ("batch_size",)
 
 #: Chaves de hiperparâmetro que são de treino (não vão ao construtor do modelo).

@@ -48,6 +48,12 @@ venv/
 .lsp/
 .DS_Store
 
+# Notebooks: o .ipynb e o .Rmd pareado SÃO versionados (o .ipynb com saídas, que
+# é o que o GitHub renderiza). Só o cache do Jupyter fica de fora.
+.ipynb_checkpoints/
+# criado pelo jupyter-lsp durante a sessão do JupyterLab
+.virtual_documents/
+
 # direnv (cache do devShell)
 /.direnv/
 

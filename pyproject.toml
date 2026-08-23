@@ -42,6 +42,9 @@ packages = ["src/cvlab"]
 
 [tool.ruff]
 line-length = 120
+# .virtual_documents: gerado pelo jupyter-lsp durante a sessão do JupyterLab.
+# notebooks/: os .ipynb usam kernel R, e o ruff os analisaria como Python.
+extend-exclude = [".virtual_documents", "notebooks"]
 target-version = "py313"
 
 [tool.ruff.lint]

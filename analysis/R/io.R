@@ -89,8 +89,6 @@ read_run <- function(run_id = NULL, root = NULL) {
   manifest <- jsonlite::fromJSON(file.path(run_dir, "manifest.json"), simplifyVector = TRUE)
   check_schema(manifest$schema_version, run_id)
 
-  trials_path <- file.path(run_dir, "trials.csv")
-
   list(
     run_id = run_id,
     dir = run_dir,
@@ -103,12 +101,23 @@ read_run <- function(run_id = NULL, root = NULL) {
       file.path(run_dir, "predictions.csv.gz"),
       show_col_types = FALSE, progress = FALSE
     ),
-    trials = if (file.exists(trials_path)) {
-      readr::read_csv(trials_path, show_col_types = FALSE, progress = FALSE)
-    } else {
-      NULL
-    }
+    trials = read_optional(file.path(run_dir, "trials.csv")),
+    # Opcionais: runs exportados antes destes artefatos existirem devolvem NULL,
+    # e o consumidor decide se degrada ou reclama. Não é motivo para bump de
+    # schema_version, porque nenhuma coluna existente mudou.
+    epochs = read_optional(file.path(run_dir, "epochs.csv")),
+    probabilities = read_optional(file.path(run_dir, "probabilities.csv.gz"))
   )
+}
+
+#' Lê um CSV se existir, senão devolve `NULL`
+#' @param path Caminho do arquivo.
+#' @keywords internal
+read_optional <- function(path) {
+  if (!file.exists(path)) {
+    return(NULL)
+  }
+  readr::read_csv(path, show_col_types = FALSE, progress = FALSE)
 }
 
 #' Valida a versão de schema de um artefato
@@ -148,13 +157,19 @@ read_dataset_eda <- function(dataset_id, root = NULL) {
   }
   summary <- jsonlite::fromJSON(file.path(dir, "summary.json"), simplifyVector = TRUE)
   check_schema(summary$schema_version, dataset_id)
-  list(
-    summary = summary,
-    examples = readr::read_csv(
-      file.path(dir, "examples.csv.gz"),
-      show_col_types = FALSE, progress = FALSE
-    )
+  examples <- readr::read_csv(
+    file.path(dir, "examples.csv.gz"),
+    show_col_types = FALSE, progress = FALSE
   )
+
+  # class_name é RÓTULO, nunca número. Em datasets cujas classes se chamam "0".."9"
+  # (MNIST, Fashion-MNIST) o readr infere numeric, e aí `lm(x ~ class_name)` vira
+  # regressão linear no valor do dígito em vez de ANOVA por classe. O R² despenca
+  # de 0,34 para 0,001 sem nenhum erro visível — o tipo de bug que passa batido
+  # porque o resultado parece só "fraco", não errado.
+  examples$class_name <- as.character(examples$class_name)
+
+  list(summary = summary, examples = examples)
 }
 
 #' Junta as predições de um run com o EDA do dataset
@@ -197,3 +212,74 @@ join_predictions_eda <- function(run, eda = NULL, root = NULL) {
 
   dplyr::mutate(joined, correct = .data$y_true == .data$y_pred)
 }
+
+#' Lê a montagem PNG de uma classe
+#'
+#' O Python exporta uma grade de exemplos por classe justamente porque o R não
+#' decodifica `.npz` nem os formatos do torchvision. Aqui ele lê um PNG comum, o
+#' que mantém a fronteira intacta: nenhuma dependência de código Python, nenhuma
+#' leitura de dataset bruto.
+#'
+#' @param eda Resultado de [read_dataset_eda()].
+#' @param class_name Nome da classe (como em `summary$class_names`).
+#' @param root Raiz de resultados.
+#' @return Objeto `magick-image`.
+#' @export
+read_montage <- function(eda, class_name, root = NULL) {
+  if (!requireNamespace("magick", quietly = TRUE)) {
+    stop("Pacote 'magick' ausente. Rode dentro de `nix develop`.", call. = FALSE)
+  }
+  files <- eda$summary$montage$files
+  if (is.null(files) || is.null(files[[class_name]])) {
+    stop(
+      glue::glue(
+        "Sem montagem para '{class_name}'. Rode `just eda <dataset>` com uma versão ",
+        "do cvlab que exporte montage/."
+      ),
+      call. = FALSE
+    )
+  }
+  path <- file.path(results_root(root), "datasets", eda$summary$dataset_id, files[[class_name]])
+  magick::image_read(path)
+}
+
+#' Montagens de todas as classes, compostas com rótulo
+#'
+#' Os rótulos são desenhados pelo ggplot, e não por `magick::image_annotate`:
+#' o ImageMagick do ambiente Nix não encontra fonte (`unable to read font`),
+#' enquanto o device gráfico do R resolve tipografia pelo systemfonts e funciona.
+#'
+#' @param eda Resultado de [read_dataset_eda()].
+#' @param classes Quais classes; `NULL` usa todas.
+#' @param root Raiz de resultados.
+#' @param ncol Colunas na composição; `NULL` escolhe automaticamente.
+#' @return Objeto patchwork (ggplot).
+#' @export
+montage_grid <- function(eda, classes = NULL, root = NULL, ncol = NULL) {
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    stop("Pacote 'patchwork' ausente. Rode dentro de `nix develop`.", call. = FALSE)
+  }
+  classes <- classes %||% names(eda$summary$montage$files)
+
+  plots <- lapply(classes, function(cl) {
+    raster <- grDevices::as.raster(read_montage(eda, cl, root))
+    ggplot2::ggplot() +
+      ggplot2::annotation_raster(raster, xmin = 0, xmax = 1, ymin = 0, ymax = 1) +
+      ggplot2::coord_fixed(xlim = c(0, 1), ylim = c(0, 1), expand = FALSE) +
+      # strwrap em vez de deixar em uma linha: nomes de classe médicos são
+      # longos ("actinic keratoses and intraepithelial carcinoma") e colidem com
+      # o título do painel vizinho.
+      ggplot2::labs(title = paste(strwrap(cl, width = 22), collapse = "\n")) +
+      ggplot2::theme_void(base_size = 10) +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(
+          hjust = 0.5, size = 8.5, lineheight = 1.05,
+          margin = ggplot2::margin(b = 3)
+        )
+      )
+  })
+
+  patchwork::wrap_plots(plots, ncol = ncol %||% min(length(plots), 5))
+}
+
+`%||%` <- function(a, b) if (is.null(a)) b else a

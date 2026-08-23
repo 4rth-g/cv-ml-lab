@@ -266,3 +266,171 @@ plot_error_consistency <- function(cw) {
     ) +
     theme_cvlab()
 }
+
+#' Balanço de classes por split
+#'
+#' Em dataset médico o desbalanço decide se acurácia é métrica honesta, então
+#' este gráfico costuma ser o primeiro a olhar, não um detalhe descritivo.
+#'
+#' @param eda Resultado de [read_dataset_eda()].
+#' @export
+plot_class_balance <- function(eda) {
+  d <- eda$examples |>
+    dplyr::count(.data$split, .data$class_name) |>
+    dplyr::group_by(.data$split) |>
+    dplyr::mutate(prop = .data$n / sum(.data$n)) |>
+    dplyr::ungroup()
+
+  ggplot2::ggplot(d, ggplot2::aes(
+    x = stats::reorder(.data$class_name, .data$prop),
+    y = .data$prop, fill = .data$split
+  )) +
+    ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.8), width = 0.72) +
+    ggplot2::coord_flip() +
+    ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    ggplot2::scale_fill_brewer(palette = "Set2", name = NULL) +
+    ggplot2::labs(
+      title = "Balanço de classes",
+      subtitle = glue::glue(
+        "razão maior/menor no treino: {round(eda$summary$train_imbalance_ratio, 2)}x"
+      ),
+      x = NULL, y = "proporção do split"
+    ) +
+    theme_cvlab()
+}
+
+#' Distribuição de uma propriedade da imagem por classe
+#'
+#' Classes que se separam aqui são separáveis por estatística trivial de pixel,
+#' sem rede nenhuma. É um piso de dificuldade útil antes de olhar acurácia.
+#'
+#' @param eda Resultado de [read_dataset_eda()].
+#' @param var Coluna numérica do EDA.
+#' @param split Split a exibir.
+#' @export
+plot_feature_by_class <- function(eda, var = "mean_intensity", split = "train") {
+  d <- dplyr::filter(eda$examples, .data$split == !!split)
+
+  ggplot2::ggplot(d, ggplot2::aes(
+    x = stats::reorder(.data$class_name, .data[[var]], FUN = stats::median),
+    y = .data[[var]]
+  )) +
+    ggplot2::geom_boxplot(outlier.size = 0.4, outlier.alpha = 0.25, fill = "#cfe3f2") +
+    ggplot2::coord_flip() +
+    ggplot2::labs(
+      title = glue::glue("{var} por classe ({split})"),
+      subtitle = "classes que já se separam aqui não precisam de rede para serem distinguidas",
+      x = NULL, y = var
+    ) +
+    theme_cvlab()
+}
+
+#' Curvas de aprendizado por época
+#'
+#' O diagnóstico mais direto de overfitting, underfitting e learning rate errado.
+#' Antes só existia no W&B; agora sai de `epochs.csv` e é reproduzível a partir
+#' de um clone do repositório.
+#'
+#' @param epochs Data frame de `epochs.csv`.
+#' @param metric `"loss"` ou `"acc"`.
+#' @export
+plot_learning_curves <- function(epochs, metric = c("loss", "acc")) {
+  metric <- match.arg(metric)
+  cols <- if (metric == "loss") c("train_loss", "val_loss") else c("train_acc", "val_acc")
+
+  d <- epochs |>
+    dplyr::select("arm", "seed_init", "epoch", dplyr::all_of(cols)) |>
+    tidyr::pivot_longer(dplyr::all_of(cols), names_to = "curva", values_to = "valor") |>
+    dplyr::filter(!is.na(.data$valor)) |>
+    dplyr::mutate(
+      fase = ifelse(grepl("^train", .data$curva), "treino", "validação"),
+      grupo = paste(.data$arm, .data$seed_init, .data$fase)
+    )
+
+  ggplot2::ggplot(d, ggplot2::aes(
+    x = .data$epoch, y = .data$valor,
+    color = .data$fase, group = .data$grupo
+  )) +
+    ggplot2::geom_line(alpha = 0.85, linewidth = 0.6) +
+    ggplot2::facet_wrap(~arm) +
+    ggplot2::scale_color_manual(values = c(treino = "#7f7f7f", `validação` = "#1f77b4"), name = NULL) +
+    ggplot2::labs(
+      title = glue::glue("Curvas de aprendizado ({metric})"),
+      subtitle = "uma linha por seed; treino e validação separando indica overfitting",
+      x = "época", y = metric
+    ) +
+    theme_cvlab()
+}
+
+#' Learning rate por época
+#' @param epochs Data frame de `epochs.csv`.
+#' @export
+plot_lr_schedule <- function(epochs) {
+  ggplot2::ggplot(
+    dplyr::filter(epochs, !is.na(.data$lr)),
+    ggplot2::aes(x = .data$epoch, y = .data$lr, color = .data$arm, group = paste(.data$arm, .data$seed_init))
+  ) +
+    ggplot2::geom_line(linewidth = 0.6) +
+    ggplot2::scale_color_manual(values = ARM_COLORS, name = NULL) +
+    ggplot2::labs(title = "Learning rate por época", x = "época", y = "lr") +
+    theme_cvlab()
+}
+
+#' Curva ROC (uma classe por vez, one-vs-rest)
+#'
+#' @param probs Data frame longo de probabilidades.
+#' @param truth Data frame com `example_idx`, `y_true`.
+#' @param class_names Nomes das classes.
+#' @export
+plot_roc <- function(probs, truth, class_names = NULL) {
+  joined <- dplyr::left_join(probs, truth, by = "example_idx")
+  curvas <- joined |>
+    dplyr::group_by(.data$class_idx) |>
+    dplyr::group_modify(function(g, key) roc_points(g$y_true == key$class_idx, g$prob)) |>
+    dplyr::ungroup() |>
+    dplyr::mutate(classe = if (is.null(class_names)) {
+      as.character(.data$class_idx)
+    } else {
+      class_names[.data$class_idx + 1L]
+    })
+
+  ggplot2::ggplot(curvas, ggplot2::aes(x = .data$fpr, y = .data$tpr, color = .data$classe)) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey65") +
+    ggplot2::geom_line(linewidth = 0.6) +
+    ggplot2::coord_fixed() +
+    ggplot2::labs(
+      title = "Curvas ROC (one-vs-rest)",
+      subtitle = "a diagonal é o classificador aleatório",
+      x = "falso positivo", y = "verdadeiro positivo", color = NULL
+    ) +
+    theme_cvlab()
+}
+
+#' Diagrama de confiabilidade (calibração)
+#'
+#' @param cal Saída de [calibration_bins()].
+#' @export
+plot_calibration <- function(cal) {
+  p <- ggplot2::ggplot(cal$bins, ggplot2::aes(x = .data$conf_media, y = .data$acerto)) +
+    ggplot2::geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "grey65")
+
+  # Com um único bin ocupado (treino curto, confiança concentrada) o geom_line
+  # avisa que cada grupo tem uma observação só. O ponto sozinho já diz tudo.
+  if (nrow(cal$bins) > 1) {
+    p <- p + ggplot2::geom_line(color = "#1f77b4", linewidth = 0.6)
+  }
+
+  p +
+    ggplot2::geom_point(ggplot2::aes(size = .data$n), color = "#1f77b4") +
+    ggplot2::scale_size_continuous(guide = "none") +
+    ggplot2::scale_x_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+    ggplot2::scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+    ggplot2::labs(
+      title = "Calibração",
+      subtitle = glue::glue(
+        "ECE = {sprintf('%.3f', cal$ece)}; acima da diagonal o modelo é modesto, abaixo é confiante demais"
+      ),
+      x = "confiança declarada", y = "acerto observado"
+    ) +
+    theme_cvlab()
+}

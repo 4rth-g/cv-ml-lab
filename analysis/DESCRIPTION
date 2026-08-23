@@ -25,6 +25,8 @@ Imports:
     effectsize,
     boot
 Suggests:
+    patchwork,
+    magick,
     scales,
     ggplot2,
     scales,
