@@ -100,14 +100,14 @@ leem artefatos e nunca produzem nenhum. Quem produz é sempre o `just`.
 
 ```bash
 just nb          # JupyterLab com o kernel R
-just nb-sync     # propaga edições entre .ipynb e .Rmd
+just nb-kernel   # registra o kernel fora do devShell (uma vez, por clone)
 just nb-run      # reexecuta todos, regenerando as saídas
 ```
 
-Cada `.ipynb` é pareado pelo jupytext com um `.Rmd` de mesmo nome. O `.ipynb`
-guarda as saídas, que é o que faz o GitHub renderizar a análise para quem só
-abre o link; o `.Rmd` é o espelho em texto, onde o diff fica legível e o merge é
-possível. Os dois são versionados.
+Os `.ipynb` são versionados com as saídas, que é o que faz o GitHub renderizar a
+análise para quem só abre o link. O pareamento com `.Rmd` via jupytext foi
+removido: o VS Code lê mal o formato, e o custo de manter dois arquivos em
+sincronia não se pagou.
 
 ### Kernel fora do devShell (VS Code, RStudio)
 

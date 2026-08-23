@@ -203,6 +203,54 @@ report-html run="latest" results_dir="results": (preflight results_dir "report-h
 report-preview run="latest" results_dir="results": (preflight results_dir "report-preview" run)
     {{r_prefix}} quarto preview analysis/report.qmd -P run_id:{{run}} -P root:../{{results_dir}}
 
+# --- Notebooks (.ipynb com kernel R) --------------------------------------
+# Exploração livre, que CONSOME artefatos e nunca produz nenhum. Quem produz é
+# sempre o `just`. Os .ipynb são versionados COM saídas, porque é isso que faz o
+# GitHub renderizar a análise para quem só abre o link; o .Rmd pareado pelo
+# jupytext é o espelho em texto onde o diff fica legível.
+
+# JupyterLab com o kernel R (cvlab)
+nb:
+    {{r_prefix}} jupyter lab notebooks/
+
+# O flake registra o kernel via JUPYTER_PATH, o que só vale DENTRO do devShell.
+# Editores que rodam fora dele (VS Code, RStudio) não enxergam o kernel e a
+# lista aparece sem o R. Esta recipe grava um kernelspec no nível do usuário
+# cujo argv chama `nix develop` no próprio repositório: resolve o R atual a cada
+# execução, então não quebra quando o flake é atualizado.
+
+# Registra o kernel R para editores fora do devShell (VS Code, RStudio)
+nb-kernel:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo="$(git rev-parse --show-toplevel)"
+    dir="${XDG_DATA_HOME:-$HOME/.local/share}/jupyter/kernels/cvlab-r"
+    mkdir -p "$dir"
+    cat > "$dir/kernel.json" <<EOF
+    {
+      "argv": [
+        "nix", "develop", "$repo", "--command",
+        "R", "--slave", "-e", "IRkernel::main()", "--args", "{connection_file}"
+      ],
+      "display_name": "R (cvlab)",
+      "language": "R"
+    }
+    EOF
+    echo "kernel gravado em $dir/kernel.json"
+    echo "Reabra o VS Code e escolha o kernel 'R (cvlab)'."
+
+# Reexecuta todos os notebooks, regenerando as saídas.
+# Cada um roda no PRÓPRIO diretório: os caminhos de RAIZ e do pacote R são
+# relativos à posição do notebook.
+nb-run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{r_prefix}} bash -c '
+      for f in $(find notebooks -name "*.ipynb" -not -path "*/.ipynb_checkpoints/*" | sort); do
+        echo "--- $f"
+        (cd "$(dirname "$f")" && jupyter nbconvert --to notebook --execute --inplace "$(basename "$f")")
+      done'
+
 # Suíte testthat do pacote cvlabstats
 report-test:
     {{r_prefix}} Rscript -e 'devtools::test("analysis")'
