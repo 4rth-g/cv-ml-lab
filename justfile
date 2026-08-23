@@ -26,6 +26,47 @@ train exp="cnn" dataset="mnist" budget="default" *overrides:
 train-cifar exp="cnn" *overrides:
     @just train {{exp}} cifar10 long {{overrides}}
 
+# Ordem deliberada: dataset por FORA, arquitetura por dentro. Em
+# `ranks.R::performance_matrix` as linhas são datasets (blocos) e as colunas são
+# modelos; terminar um dataset fecha uma LINHA inteira, e uma linha completa já
+# compara as 4 arquiteturas entre si. Na ordem inversa uma interrupção deixaria
+# colunas parciais, que não comparam nada.
+#
+# `objective=balanced_accuracy` no derma (razão 58,7) e no breast (2,7): lá a
+# acurácia simples é maximizada ignorando as classes raras, e a escolha de
+# config sairia guiada pela majoritária. É critério de SELEÇÃO; a coluna `acc`
+# do export continua sendo acurácia simples em todo run. Ver `cvlab.metrics`.
+#
+# Screening NÃO é resultado reportável (n_seeds=3, busca em subconjunto). Serve
+# para achar onde vale gastar `default`. Ao promover um par, APAGUE o
+# `results/optuna_study_<dataset>_<modelo>.db` correspondente: o estudo é
+# retomado com load_if_exists e herdaria os trials de screening.
+
+# Grid de varredura: 4 arquiteturas x 4 datasets do EDA, orçamento screening
+grid:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    falhas=()
+    for spec in "mnist|" \
+                "medmnist|dataset.subset=breastmnist tuning.objective=balanced_accuracy" \
+                "medmnist|dataset.subset=dermamnist tuning.objective=balanced_accuracy" \
+                "medmnist|dataset.subset=organmnist3d"; do
+        ds="${spec%%|*}"; extra="${spec#*|}"
+        for exp in perceptron mlp cnn resnet; do
+            echo "=== $exp / $ds $extra ==="
+            if ! just train "$exp" "$ds" screening $extra; then
+                falhas+=("$exp/$ds $extra")
+            fi
+        done
+    done
+    echo
+    if [ ${#falhas[@]} -eq 0 ]; then
+        echo "grid completo: $(wc -l < results/runs/index.csv) linhas no índice"
+    else
+        printf 'FALHARAM (%d):\n' "${#falhas[@]}"; printf '  %s\n' "${falhas[@]}"
+    fi
+    echo "Próximo passo: just report-all"
+
 # O output_dir separado NÃO é detalhe: optuna_search retoma estudos com
 # load_if_exists=True, então um smoke gravando em results/ deixaria trials de
 # orçamento smoke no estudo que o run real depois herdaria — contaminando a
