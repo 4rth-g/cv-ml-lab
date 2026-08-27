@@ -46,6 +46,9 @@ line-length = 120
 # notebooks/: os .ipynb usam kernel R, e o ruff os analisaria como Python.
 extend-exclude = [".virtual_documents", "notebooks"]
 target-version = "py313"
+# Todo cache regenerável mora em .cache/, e não numa entrada oculta própria na
+# raiz. Ferramenta nenhuma precisa da raiz para isso; era só o default.
+cache-dir = ".cache/ruff"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
@@ -53,3 +56,4 @@ select = ["E", "F", "W", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+cache_dir = ".cache/pytest"

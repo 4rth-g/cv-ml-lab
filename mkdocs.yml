@@ -2,6 +2,9 @@ site_name: cv-ml-lab
 site_description: Framework dataset-agnóstico de visão computacional com tuning rigoroso.
 repo_url: https://github.com/4rth-g/cv-ml-lab
 docs_dir: docs
+# Build regenerável (`just docs`), então mora no cache junto do resto e não como
+# um diretório próprio na raiz. `docs/` é a fonte; `site/` era só o produto.
+site_dir: .cache/site
 
 theme:
   name: material

@@ -12,6 +12,19 @@ output_dir: ${paths.root_dir}/results
 paths:
   root_dir: .
 
+# Onde o Hydra grava o `train.log` e a config resolvida de cada execução.
+#
+# O default é `outputs/<data>/<hora>/` NA RAIZ do repositório, o que enche a raiz
+# de um diretório por run. Nada ali é insumo de análise: o que a análise consome
+# está em `results/runs/<run_id>/`, e o `manifest.json` já grava a config
+# resolvida. Sobra o log, que é útil para depurar e não para reportar — então vai
+# junto do resto do cache regenerável.
+hydra:
+  run:
+    dir: ${paths.root_dir}/.cache/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${paths.root_dir}/.cache/hydra/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
 # Quais fontes de variância o multi-seed faz variar.
 #
 # Variar só a inicialização (o default histórico) mede a variância dos PESOS e
