@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,42,42,official,val,0.8695652173913043
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,42,42,official,test,0.7245901639344262
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,43,42,official,val,0.8757763975155279
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,43,42,official,test,0.7704918032786885
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,44,42,official,val,0.8633540372670807
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,baseline,44,42,official,test,0.7508196721311475
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,42,42,official,val,0.968944099378882
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,42,42,official,test,0.8786885245901639
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,43,42,official,val,0.968944099378882
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,43,42,official,test,0.8377049180327869
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,44,42,official,val,0.968944099378882
+resnet-medmnist-2026-08-23_17-31-21,resnet,medmnist,organmnist3d,screening,tuned,44,42,official,test,0.8737704918032787

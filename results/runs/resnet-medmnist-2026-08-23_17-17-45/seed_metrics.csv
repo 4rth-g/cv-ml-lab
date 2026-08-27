@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,42,42,official,val,0.8846153846153846
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,42,42,official,test,0.8205128205128205
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,43,42,official,val,0.8205128205128205
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,43,42,official,test,0.75
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,44,42,official,val,0.8461538461538461
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,baseline,44,42,official,test,0.8397435897435898
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,42,42,official,val,0.8846153846153846
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,42,42,official,test,0.8269230769230769
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,43,42,official,val,0.8846153846153846
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,43,42,official,test,0.8589743589743589
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,44,42,official,val,0.8589743589743589
+resnet-medmnist-2026-08-23_17-17-45,resnet,medmnist,breastmnist,screening,tuned,44,42,official,test,0.8525641025641025

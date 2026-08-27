@@ -1,0 +1,10 @@
+trial_number,state,value,duration_s,params_json
+0,COMPLETE,0.8956999778747559,2.69939,"{""batch_size"": 64, ""dropout_rate"": 0.2, ""hidden_units"": 256, ""lr"": 0.001, ""n_layers"": 2, ""optimizer"": ""adam"", ""weight_decay"": 1e-06}"
+1,COMPLETE,0.9079999923706055,1.547745,"{""batch_size"": 64, ""dropout_rate"": 0.02904180608409973, ""hidden_units"": 256, ""lr"": 0.0029621516588303515, ""n_layers"": 1, ""optimizer"": ""adam"", ""weight_decay"": 5.337032762603957e-06}"
+2,COMPLETE,0.14990000426769257,1.555066,"{""batch_size"": 128, ""dropout_rate"": 0.06974693032602092, ""hidden_units"": 512, ""lr"": 0.0003135775732257748, ""n_layers"": 3, ""optimizer"": ""sgd"", ""weight_decay"": 1.5339162591163623e-06}"
+3,COMPLETE,0.3481999933719635,2.301657,"{""batch_size"": 32, ""dropout_rate"": 0.15230688458668534, ""hidden_units"": 128, ""lr"": 0.00014653521030672147, ""n_layers"": 2, ""optimizer"": ""sgd"", ""weight_decay"": 1.0842262717330169e-05}"
+4,COMPLETE,0.8379999995231628,1.506353,"{""batch_size"": 128, ""dropout_rate"": 0.3875664116805573, ""hidden_units"": 128, ""lr"": 0.003946212980759096, ""n_layers"": 3, ""optimizer"": ""adamw"", ""weight_decay"": 2.0013420622879995e-05}"
+5,PRUNED,0.5636000037193298,1.667173,"{""batch_size"": 64, ""dropout_rate"": 0.07046211248738132, ""hidden_units"": 512, ""lr"": 0.0023062618121677952, ""n_layers"": 3, ""optimizer"": ""sgd"", ""weight_decay"": 0.0006720930050156114}"
+6,PRUNED,0.17440000176429749,1.503873,"{""batch_size"": 128, ""dropout_rate"": 0.31164906341377896, ""hidden_units"": 256, ""lr"": 0.0003649100451857361, ""n_layers"": 3, ""optimizer"": ""sgd"", ""weight_decay"": 7.742116473996259e-05}"
+7,COMPLETE,0.8992000222206116,1.623989,"{""batch_size"": 64, ""dropout_rate"": 0.26136641469099703, ""hidden_units"": 512, ""lr"": 0.0005325732706437209, ""n_layers"": 2, ""optimizer"": ""adam"", ""weight_decay"": 0.004268407710065497}"
+8,PRUNED,0.4392000138759613,1.526262,"{""batch_size"": 128, ""dropout_rate"": 0.08061064362700221, ""hidden_units"": 512, ""lr"": 0.0037977679442478553, ""n_layers"": 3, ""optimizer"": ""sgd"", ""weight_decay"": 0.00014367095138664247}"

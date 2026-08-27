@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "run_id": "perceptron-mnist-2026-08-23_15-24-30",
+  "timestamp_utc": "2026-08-23T18:27:26.189220+00:00",
+  "commit": "ca7d1a7",
+  "model": "perceptron",
+  "dataset": "mnist",
+  "subset": "",
+  "dataset_id": "mnist",
+  "budget": "screening",
+  "n_seeds": 3,
+  "final_epochs": 8,
+  "variance": {
+    "vary_init": true,
+    "vary_data_order": false,
+    "vary_split": false,
+    "uses_official_split": false
+  },
+  "in_channels": 1,
+  "num_classes": 10,
+  "class_names": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9"
+  ],
+  "n_val": 10000,
+  "n_test": 10000,
+  "accelerator": "xpu",
+  "baseline_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.001,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 1e-06
+  },
+  "tuned_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.0012399967836846098,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 0.0048696409415209
+  },
+  "objective": "accuracy",
+  "baseline_val_score_mean": 0.8344999999999999,
+  "best_val_score_mean": 0.8329333333333334,
+  "search_best_val_acc": 0.8267999887466431,
+  "selected_arm": "baseline",
+  "selected_label": "baseline (fallback)",
+  "tuned_ge_baseline": false,
+  "mcnemar_baseline_seed": 44,
+  "mcnemar_tuned_seed": 44
+}

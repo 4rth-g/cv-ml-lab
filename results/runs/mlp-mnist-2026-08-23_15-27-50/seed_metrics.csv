@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,42,42,42,val,0.9771
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,42,42,42,test,0.9786
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,43,42,42,val,0.9734
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,43,42,42,test,0.9761
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,44,42,42,val,0.9771
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,baseline,44,42,42,test,0.9796
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,42,42,42,val,0.9658
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,42,42,42,test,0.9702
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,43,42,42,val,0.9696
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,43,42,42,test,0.9725
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,44,42,42,val,0.9662
+mlp-mnist-2026-08-23_15-27-50,mlp,mnist,,screening,tuned,44,42,42,test,0.9641

@@ -1,0 +1,10 @@
+trial_number,state,value,duration_s,params_json
+0,COMPLETE,0.5488722324371338,3.368129,"{""batch_size"": 128, ""blocks_per_stage"": 2, ""lr"": 0.01, ""n_stages"": 3, ""optimizer"": ""sgd"", ""scheduler"": ""none"", ""weight_decay"": 0.0005, ""width"": 64}"
+1,COMPLETE,0.5,2.017798,"{""batch_size"": 256, ""blocks_per_stage"": 1, ""lr"": 0.02416482602989751, ""n_stages"": 3, ""optimizer"": ""sgd"", ""scheduler"": ""step"", ""weight_decay"": 3.511356313970405e-05, ""width"": 32}"
+2,COMPLETE,0.5,0.963056,"{""batch_size"": 128, ""blocks_per_stage"": 3, ""lr"": 0.0028804169778805498, ""n_stages"": 3, ""optimizer"": ""sgd"", ""scheduler"": ""cosine"", ""weight_decay"": 1.5673095467235405e-05, ""width"": 64}"
+3,COMPLETE,0.553884744644165,1.780226,"{""batch_size"": 64, ""blocks_per_stage"": 3, ""lr"": 0.003939675937754723, ""n_stages"": 3, ""optimizer"": ""sgd"", ""scheduler"": ""cosine"", ""weight_decay"": 0.008105016126411584, ""width"": 64}"
+4,COMPLETE,0.5,0.515981,"{""batch_size"": 256, ""blocks_per_stage"": 3, ""lr"": 0.08071418522169696, ""n_stages"": 2, ""optimizer"": ""adamw"", ""scheduler"": ""none"", ""weight_decay"": 1.6736010167825783e-05, ""width"": 32}"
+5,COMPLETE,0.5,0.830709,"{""batch_size"": 64, ""blocks_per_stage"": 2, ""lr"": 0.09683377710407785, ""n_stages"": 2, ""optimizer"": ""adamw"", ""scheduler"": ""cosine"", ""weight_decay"": 0.0015446089075047066, ""width"": 32}"
+6,COMPLETE,0.5388471484184265,1.156043,"{""batch_size"": 256, ""blocks_per_stage"": 2, ""lr"": 0.0011441689901040717, ""n_stages"": 2, ""optimizer"": ""adamw"", ""scheduler"": ""step"", ""weight_decay"": 0.005280796376895365, ""width"": 64}"
+7,COMPLETE,0.5,0.747251,"{""batch_size"": 128, ""blocks_per_stage"": 2, ""lr"": 0.07067625933120901, ""n_stages"": 3, ""optimizer"": ""adamw"", ""scheduler"": ""step"", ""weight_decay"": 8.995191735587162e-05, ""width"": 64}"
+8,COMPLETE,0.5037593841552734,0.36351,"{""batch_size"": 256, ""blocks_per_stage"": 1, ""lr"": 0.14779628299679287, ""n_stages"": 3, ""optimizer"": ""adamw"", ""scheduler"": ""cosine"", ""weight_decay"": 0.007715105777813051, ""width"": 32}"

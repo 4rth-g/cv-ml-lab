@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,42,42,official,val,0.8333333333333334
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,42,42,official,test,0.7948717948717948
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,43,42,official,val,0.8589743589743589
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,43,42,official,test,0.75
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,44,42,official,val,0.8717948717948718
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,baseline,44,42,official,test,0.7756410256410257
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,42,42,official,val,0.8333333333333334
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,42,42,official,test,0.7948717948717948
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,43,42,official,val,0.8589743589743589
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,43,42,official,test,0.75
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,44,42,official,val,0.8717948717948718
+mlp-medmnist-2026-08-23_17-15-37,mlp,medmnist,breastmnist,screening,tuned,44,42,official,test,0.7756410256410257

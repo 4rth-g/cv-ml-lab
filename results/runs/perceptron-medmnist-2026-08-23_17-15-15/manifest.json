@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "run_id": "perceptron-medmnist-2026-08-23_17-15-15",
+  "timestamp_utc": "2026-08-23T20:15:22.915647+00:00",
+  "commit": "ca7d1a7-dirty",
+  "model": "perceptron",
+  "dataset": "medmnist",
+  "subset": "breastmnist",
+  "dataset_id": "medmnist-breastmnist-28",
+  "budget": "screening",
+  "n_seeds": 3,
+  "final_epochs": 8,
+  "variance": {
+    "vary_init": true,
+    "vary_data_order": false,
+    "vary_split": false,
+    "uses_official_split": true
+  },
+  "in_channels": 1,
+  "num_classes": 2,
+  "class_names": [
+    "malignant",
+    "normal, benign"
+  ],
+  "n_val": 78,
+  "n_test": 156,
+  "accelerator": "xpu",
+  "baseline_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.001,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 1e-06
+  },
+  "tuned_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.000816845589476017,
+    "batch_size": 32,
+    "optimizer": "sgd",
+    "weight_decay": 4.809461967501575e-06
+  },
+  "objective": "balanced_accuracy",
+  "baseline_val_score_mean": 0.7468671679197995,
+  "best_val_score_mean": 0.7602339181286549,
+  "study_name": "cvlab_optuna_medmnist-breastmnist-28_linearperceptron",
+  "search_n_trials": 9,
+  "search_best_val_acc": 0.7268170714378357,
+  "selected_arm": "tuned",
+  "selected_label": "melhor config (Optuna)",
+  "tuned_ge_baseline": true,
+  "mcnemar_baseline_seed": 44,
+  "mcnemar_tuned_seed": 43
+}
