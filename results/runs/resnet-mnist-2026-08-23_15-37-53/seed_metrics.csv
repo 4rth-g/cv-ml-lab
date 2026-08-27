@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,42,42,42,val,0.9942
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,42,42,42,test,0.9949
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,43,42,42,val,0.9944
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,43,42,42,test,0.9938
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,44,42,42,val,0.9948
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,baseline,44,42,42,test,0.9959
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,42,42,42,val,0.9968
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,42,42,42,test,0.9967
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,43,42,42,val,0.9968
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,43,42,42,test,0.9969
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,44,42,42,val,0.9969
+resnet-mnist-2026-08-23_15-37-53,resnet,mnist,,screening,tuned,44,42,42,test,0.9971

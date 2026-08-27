@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,42,42,official,val,0.9565217391304348
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,42,42,official,test,0.7131147540983607
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,43,42,official,val,0.9503105590062112
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,43,42,official,test,0.739344262295082
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,44,42,official,val,0.9565217391304348
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,baseline,44,42,official,test,0.739344262295082
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,42,42,official,val,0.9627329192546584
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,42,42,official,test,0.7475409836065574
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,43,42,official,val,0.968944099378882
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,43,42,official,test,0.740983606557377
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,44,42,official,val,0.968944099378882
+perceptron-medmnist-2026-08-23_17-27-01,perceptron,medmnist,organmnist3d,screening,tuned,44,42,official,test,0.7475409836065574

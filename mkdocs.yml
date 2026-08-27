@@ -2,6 +2,9 @@ site_name: cv-ml-lab
 site_description: Framework dataset-agnóstico de visão computacional com tuning rigoroso.
 repo_url: https://github.com/4rth-g/cv-ml-lab
 docs_dir: docs
+# Build regenerável (`just docs`), então mora no cache junto do resto e não como
+# um diretório próprio na raiz. `docs/` é a fonte; `site/` era só o produto.
+site_dir: .cache/site
 
 theme:
   name: material
@@ -52,10 +55,13 @@ markdown_extensions:
 nav:
   - Início: index.md
   - Fluxo de trabalho: WORKFLOW.md
+  - Análise estatística (R): ANALISE-R.md
   - Referência da API:
       - Tuning (busca + comparação): reference/tuning.md
       - Modelos: reference/models.md
       - Dados: reference/data.md
-      - Tracking e estatística: reference/tracking.md
+      - Tracking: reference/tracking.md
+      - Export de artefatos: reference/export.md
+      - EDA de dataset: reference/eda.md
       - Hardware (XPU): reference/xpu.md
       - Treino (entrypoint): reference/train.md

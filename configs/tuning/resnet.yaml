@@ -16,3 +16,13 @@ search_space:
   # O scheduler é hiperparâmetro, não decisão de código: a busca e a comparação
   # multi-seed é que dizem se o decay de LR vale a pena nesta arquitetura.
   scheduler: {type: categorical, choices: [none, cosine, step]}
+
+# Métrica que a busca maximiza E que decide baseline-vs-tunada em
+# `rigorous_compare`. NÃO é a métrica de relatório: a coluna `acc` do export é
+# sempre acurácia simples (micro), em todo split. Ver `cvlab.metrics`.
+#
+# `accuracy` preserva o protocolo histórico. Use `balanced_accuracy` em datasets
+# desbalanceados (DermaMNIST tem razão 58,7): lá a acurácia simples é maximizada
+# ignorando as classes raras, e a escolha de config sairia guiada pela classe
+# majoritária. O valor vai ao manifest, então o relatório declara o critério.
+objective: accuracy

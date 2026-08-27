@@ -11,3 +11,56 @@ data_dir: ${paths.root_dir}/data
 output_dir: ${paths.root_dir}/results
 paths:
   root_dir: .
+
+# Onde o Hydra grava o `train.log` e a config resolvida de cada execução.
+#
+# O default é `outputs/<data>/<hora>/` NA RAIZ do repositório, o que enche a raiz
+# de um diretório por run. Nada ali é insumo de análise: o que a análise consome
+# está em `results/runs/<run_id>/`, e o `manifest.json` já grava a config
+# resolvida. Sobra o log, que é útil para depurar e não para reportar — então vai
+# junto do resto do cache regenerável.
+hydra:
+  run:
+    dir: ${paths.root_dir}/.cache/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${paths.root_dir}/.cache/hydra/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+
+# Quais fontes de variância o multi-seed faz variar.
+#
+# Variar só a inicialização (o default histórico) mede a variância dos PESOS e
+# nada mais: o split e a ordem dos dados ficam idênticos entre as seeds, e o
+# IC95% resultante sai estreito demais (Bouthillier et al., MLSys 2021).
+#
+# Ligar as outras duas alarga o intervalo porque passa a medir variância que
+# antes ficava escondida — é correção, não piora. Fica desligado por default
+# para não invalidar em silêncio os resultados já reportados; as três seeds vão
+# para o export em colunas próprias de qualquer forma, então o relatório sempre
+# diz qual variância foi medida.
+variance:
+  vary_init: true
+  vary_data_order: false
+  # Sem efeito em datasets com split oficial (ex.: MedMNIST).
+  vary_split: false
+
+# EDA de dataset (`just eda`).
+#
+# As duas metades do EDA têm exigências opostas. O `examples.csv.gz` precisa
+# descrever a imagem que o MODELO recebeu, senão cruzar erro com propriedade da
+# imagem deixa de fazer sentido. A montagem PNG só precisa ser legível para o
+# olho humano, e 28x28 é pequeno demais para julgar uma lesão de pele.
+#
+# Por isso `montage_size` é independente de `dataset.size`: as estatísticas saem
+# na resolução de treino e as imagens numa maior. O `dataset_id` continua vindo
+# da resolução de treino, então o join com as predições não quebra.
+#
+# `null` usa a mesma resolução do treino. Só tem efeito em datasets que aceitam
+# o parâmetro `size` (MedMNIST).
+eda:
+  montage_size: null
+  per_class: 16
+  # Como reduzir um volume 28x28x28 a imagem 2D nas montagens (só nos subsets 3D):
+  #   mip        projeção de intensidade máxima; a que mais parece textura
+  #   triplanar  três MIP ortogonais lado a lado; mais informativa
+  #   mosaic     as 28 fatias numa grade 7x4; preserva tudo, cada fatia fica pequena
+  #   middle     só a fatia central
+  volume_view: triplanar

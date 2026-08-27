@@ -21,14 +21,18 @@ O fluxo de trabalho (exploração em notebooks → formalização neste reposit�
 cv-ml-lab/
 ├── configs/            # Hydra: dataset / model / tuning (+ budget) / logger / trainer
 ├── src/cvlab/
-│   ├── data/           # DataModules (base + dataset_cls: mnist, fashion_mnist, cifar10)
+│   ├── data/           # DataModules (mnist, fashion_mnist, cifar10 + medmnist parametrizado)
 │   ├── models/         # CNN, ResNet, MLP e Perceptron + factory + LitClassifier
-│   ├── tuning/         # busca Optuna (search.py) + comparação rigorosa (rigorous.py)
-│   ├── tracking.py     # W&B, SQLite, run_name e mcnemar_test
+│   ├── tuning/         # busca Optuna (search.py) + retreino multi-seed (rigorous.py)
+│   ├── export.py       # artefatos do run (seed_metrics, predictions, manifest)
+│   ├── eda.py          # EDA de dataset (entrypoint cvlab-eda)
+│   ├── tracking.py     # W&B, SQLite, run_name e commit
 │   ├── xpu.py          # accelerator Intel Arc (XPU)
 │   └── train.py        # entrypoint (cvlab-train)
-├── tests/              # pytest (forward, mcnemar, datamodule, lit_module)
-├── justfile            # atalhos de treino e manutenção (`just`)
+├── analysis/           # pacote R (cvlabstats): inferência, gráficos e relatório
+├── flake.nix           # devShell com R + Quarto para analysis/
+├── tests/              # pytest (forward, export, datamodule, medmnist)
+├── justfile            # atalhos de treino, EDA, relatório e manutenção (`just`)
 └── docs/WORKFLOW.md
 ```
 
@@ -36,8 +40,11 @@ cv-ml-lab/
 
 1. **Busca (Optuna)** em um subconjunto do treino, com a configuração baseline enfileirada como primeiro trial (`study.enqueue_trial`), garantindo que o melhor da busca não fique abaixo da baseline na validação.
 2. **Retreino multi-seed** da baseline e da melhor configuração no split de treino completo, com restauração dos pesos da melhor época segundo a validação.
-3. **Comparação estatística pareada**: teste t pareado (`scipy.stats.ttest_rel`), tamanho de efeito de Cohen ($d_z$), intervalo de confiança de 95% e teste de McNemar (`binom_exact` / `chi2_continuity`).
+3. **Export da evidência bruta**: acurácia por seed e predições por exemplo (validação e teste) em `results/runs/<run_id>/`.
 4. **Seleção na validação**: a configuração tunada só substitui a baseline se `best_val_mean >= baseline_val_mean`. O conjunto de teste é usado uma única vez, para reportar.
+5. **Inferência estatística em R**, pós-hoc, sobre os artefatos: teste t pareado, Cohen ($d_z$) com intervalo, McNemar, correção de Holm/BH, bootstrap e equivalência. Ver [Análise estatística (R)](docs/ANALISE-R.md).
+
+O passo 5 é deliberadamente separado do passo 4: como nenhum p-valor é calculado durante o treino, nenhum p-valor pode influenciar qual modelo é entregue.
 
 ## Instalação
 
@@ -121,6 +128,14 @@ docstrings seguem o estilo Google.
 
 Relatório público no Weights & Biases: [Resultados — cv-ml-lab](https://api.wandb.ai/links/grazziaarthur-universidade-federal-de-sergipe/trq7urpk). Cada run contém a configuração completa, as curvas de treino por época e as métricas do método.
 
+
+> **Proveniência.** As duas tabelas abaixo vêm de runs anteriores à migração da
+> estatística para R. Os p-valores são **brutos**, sem correção para múltiplas
+> comparações, e as predições por exemplo desses runs não foram preservadas —
+> então não é possível recalculá-los com Holm/BH nem gerar bootstrap
+> retroativamente. Runs novos saem de `just report-all`, já com p ajustado. Ver
+> [Análise estatística (R)](docs/ANALISE-R.md).
+
 | Dataset | Baseline | Tunado (Optuna) | Δ | t pareado (p) | McNemar (p) |
 |---|---|---|---|---|---|
 | MNIST | 99,22% ± 0,09 | 99,40% ± 0,07 | +0,18 pp | t=5,19 (0,007) | 0,18 |
@@ -153,6 +168,38 @@ Vale notar que a **baseline** da ResNet (89,37%, sem scheduler e sem tuning) já
 A busca da ResNet selecionou `scheduler: cosine`, junto com `sgd`, 3 blocos por estágio e `lr≈3,9×10⁻³`. Isso importa metodologicamente: o cosine annealing é receita conhecida para ResNet em CIFAR, mas aqui ele **não** foi fixado no fonte — entrou como dimensão do `search_space`, e foi a busca que o escolheu, o multi-seed que confirmou o ganho e o teste pareado que o quantificou. O resultado é o mesmo que a literatura recomenda; a diferença é que ele veio com evidência própria em vez de autoridade.
 
 Os 93,93% também colocam o projeto na faixa que a literatura reporta para ResNets em CIFAR-10 (93–95%), mesmo com apenas 30 épocas de treino final — bem abaixo das 100–200 das receitas clássicas.
+
+## Análise estatística (R)
+
+O treino não calcula p-valor nenhum. A inferência acontece depois, em R, sobre os
+artefatos que o run exporta:
+
+```bash
+just eda mnist          # EDA do dataset (uma vez por dataset)
+just report             # análise do run mais recente (texto)
+just report-all         # agregado, com p corrigido
+just report-html        # relatório HTML -> analysis/output/report.html
+just report-preview     # preview com recarga automática
+```
+
+O R vive no `flake.nix`, mas não é preciso entrar no `nix develop` antes: as
+recipes de análise detectam a ausência do R no PATH e entram no devShell
+sozinhas. Para que ferramentas fora do `just` (extensão Quarto do VS Code,
+RStudio) também enxerguem o R, rode `direnv allow` uma vez.
+
+A separação é estrutural, não organizacional: como a seleção baseline-vs-tunada
+usa apenas médias de validação, e nenhum teste de hipótese existe durante o
+treino, nenhum p-valor pode influenciar qual modelo é entregue.
+
+Além da paridade com o que havia em Python (t pareado, $d_z$, IC95%, McNemar),
+a camada R traz correção de Holm/BH, IC do tamanho de efeito, IQM com bootstrap
+BCa, P(tunada > baseline), equivalência (TOST), Friedman com post-hoc
+Wilcoxon-Holm, e métricas pós-hoc calculadas a partir das predições exportadas —
+F1 macro, balanced accuracy, kappa quadrático e matriz de confusão, retroativas
+sobre runs já feitos, sem retreinar.
+
+Detalhes do contrato de arquivos e do porquê de cada escolha:
+[docs/ANALISE-R.md](docs/ANALISE-R.md).
 
 ## Hardware
 

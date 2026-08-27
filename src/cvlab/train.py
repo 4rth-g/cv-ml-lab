@@ -10,6 +10,7 @@ import torch
 from omegaconf import DictConfig, OmegaConf, open_dict
 
 from cvlab.data.registry import get_datamodule
+from cvlab.export import export_run_artifacts
 from cvlab.models.factory import baseline_params
 from cvlab.tracking import init_wandb, log_experiment, run_name
 from cvlab.tuning.rigorous import rigorous_compare, train_final
@@ -71,25 +72,48 @@ def train(cfg: DictConfig) -> None:
     print(f"Melhor Config (Val Mean): {res['best_val_mean'] * 100:.2f}% ± {res['best_val_std'] * 100:.2f}%")
     print(f"Baseline (Test Mean): {res['baseline_test_mean'] * 100:.2f}% ± {res['baseline_test_std'] * 100:.2f}%")
     print(f"Melhor Config (Test Mean): {res['best_test_mean'] * 100:.2f}% ± {res['best_test_std'] * 100:.2f}%")
-    print(f"Paired t-test: t={res['t_stat']:.3f}, p={res['p_value']:.4f}")
-    print(f"Cohen's d_z: {res['cohens_d']:.3f}")
-    print(f"McNemar: p={res['mcnemar']['p_value']:.4e} ({res['mcnemar']['method']})")
+    print(f"Δ teste (tunada - baseline): {res['diff_test_mean'] * 100:+.2f} pp")
     print(f"Config Selecionada (Validação): {res['selected_name']}")
 
-    # 3. Experiment Tracking
+    # 3. Export dos artefatos brutos (acurácia por seed, predições por exemplo,
+    # histórico da busca). ANTES do W&B de propósito: uma falha no logger não
+    # pode custar a evidência do run, que é o insumo da análise em R.
+    run_dir = export_run_artifacts(
+        run_id=cfg.logger.name,
+        res=res,
+        cfg=cfg,
+        datamodule=datamodule,
+        output_dir=output_dir,
+        study=study,
+    )
+    # A sugestão precisa carregar o output_dir: um smoke grava em results/_smoke,
+    # e `just report` sozinho procuraria em results/ e não acharia nada. Mandar o
+    # comando errado aqui é o que transforma "rode o relatório" num beco sem saída.
+    report_root = "" if output_dir.as_posix().rstrip("/") == "results" else f" latest {output_dir}"
+    print(f"Artefatos: {run_dir}/")
+    print(f"Análise estatística (R): just report{report_root}")
+
+    # 4. Experiment Tracking
     wandb_logger = init_wandb(cfg)
     final_model = res["selected_model"]
     if wandb_logger is not None:
+        # Só descritivo: médias, desvios e o delta. Os testes de hipótese saem
+        # do relatório em R, sobre os artefatos, e não do logger do treino.
         metrics_to_log = {
             "search_best_val_acc": study.best_value,
+            "n_seeds": res["n_seeds"],
             "baseline_val_mean": res["baseline_val_mean"],
+            "baseline_val_std": res["baseline_val_std"],
             "best_val_mean": res["best_val_mean"],
+            "best_val_std": res["best_val_std"],
             "baseline_test_mean": res["baseline_test_mean"],
+            "baseline_test_std": res["baseline_test_std"],
             "best_test_mean": res["best_test_mean"],
-            "t_stat": res["t_stat"],
-            "p_value": res["p_value"],
-            "cohens_d": res["cohens_d"],
-            "mcnemar_p_value": res["mcnemar"]["p_value"],
+            "best_test_std": res["best_test_std"],
+            "diff_test_mean": res["diff_test_mean"],
+            "tuned_ge_baseline": res["tuned_ge_baseline"],
+            "selected_arm": res["selected_arm"],
+            "run_id": cfg.logger.name,
         }
         wandb_logger.log_hyperparams(OmegaConf.to_container(cfg, resolve=True))
         wandb_logger.experiment.summary.update(metrics_to_log)
@@ -100,32 +124,61 @@ def train(cfg: DictConfig) -> None:
     log_experiment(
         model_name=res["selected_name"],
         config=res["selected_config"],
+        # O tracker vira o índice histórico ("que config foi escolhida, com que
+        # médias") mais um ponteiro para onde mora a evidência bruta.
         metrics={
+            "n_seeds": res["n_seeds"],
             "baseline_val_mean": res["baseline_val_mean"],
+            "baseline_val_std": res["baseline_val_std"],
             "best_val_mean": res["best_val_mean"],
+            "best_val_std": res["best_val_std"],
             "baseline_test_mean": res["baseline_test_mean"],
+            "baseline_test_std": res["baseline_test_std"],
             "best_test_mean": res["best_test_mean"],
-            "t_stat": res["t_stat"],
-            "p_value": res["p_value"],
-            "cohens_d": res["cohens_d"],
-            "mcnemar": res["mcnemar"],
+            "best_test_std": res["best_test_std"],
+            "diff_test_mean": res["diff_test_mean"],
+            "selected_arm": res["selected_arm"],
+            "run_id": cfg.logger.name,
+            "artifacts_dir": str(run_dir),
         },
         seed=cfg.seed,
         db_path=output_dir / "experiment_tracker.db",
     )
 
-    # 4. Salvar Checkpoint Final
+    # 5. Salvar Checkpoint Final
     # Nomeado como o run do W&B (modelo-dataset-data_hora) para os dois serem
     # correlacionáveis; um nome fixo faria cada execução sobrescrever a anterior.
     ckpt_dir = output_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_path = ckpt_dir / f"{cfg.logger.name}.ckpt"
     selected_model: L.LightningModule = final_model
+    # Só o resumo, nunca `res` inteiro: ele carrega `selected_model` (o módulo
+    # seria pickled DUAS vezes no mesmo arquivo) e agora também as predições por
+    # exemplo. A evidência bruta mora em results/runs/<run_id>/, não aqui.
     torch.save(
         {
             "state_dict": selected_model.state_dict(),
             "config": res["selected_config"],
-            "metrics": res,
+            "metrics": {
+                k: res[k]
+                for k in (
+                    "n_seeds",
+                    "baseline_val_mean",
+                    "baseline_val_std",
+                    "best_val_mean",
+                    "best_val_std",
+                    "baseline_test_mean",
+                    "baseline_test_std",
+                    "best_test_mean",
+                    "best_test_std",
+                    "diff_test_mean",
+                    "tuned_ge_baseline",
+                    "selected_arm",
+                    "selected_name",
+                )
+            },
+            "run_id": cfg.logger.name,
+            "artifacts_dir": str(run_dir),
         },
         checkpoint_path,
     )

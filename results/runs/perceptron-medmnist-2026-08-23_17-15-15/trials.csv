@@ -1,0 +1,10 @@
+trial_number,state,value,duration_s,params_json
+0,COMPLETE,0.6804511547088623,1.129139,"{""batch_size"": 64, ""lr"": 0.001, ""optimizer"": ""adam"", ""weight_decay"": 1e-06}"
+1,COMPLETE,0.6979950070381165,0.355062,"{""batch_size"": 32, ""lr"": 0.0005611516415334506, ""optimizer"": ""adam"", ""weight_decay"": 0.0029154431891537554}"
+2,COMPLETE,0.6766917109489441,0.286183,"{""batch_size"": 128, ""lr"": 0.0015930522616241021, ""optimizer"": ""adam"", ""weight_decay"": 5.415244119402541e-06}"
+3,COMPLETE,0.6553884744644165,0.344966,"{""batch_size"": 32, ""lr"": 0.0004059611610484307, ""optimizer"": ""adam"", ""weight_decay"": 2.9204338471814107e-05}"
+4,COMPLETE,0.7268170714378357,0.358754,"{""batch_size"": 32, ""lr"": 0.000816845589476017, ""optimizer"": ""sgd"", ""weight_decay"": 4.809461967501575e-06}"
+5,PRUNED,0.5626566410064697,0.265428,"{""batch_size"": 64, ""lr"": 0.00013492834268013249, ""optimizer"": ""sgd"", ""weight_decay"": 5.762487216478604e-05}"
+6,PRUNED,0.5764411091804504,0.267569,"{""batch_size"": 128, ""lr"": 0.00017541893487450815, ""optimizer"": ""adamw"", ""weight_decay"": 0.00012030178871154674}"
+7,COMPLETE,0.689223051071167,0.291246,"{""batch_size"": 64, ""lr"": 0.0012399967836846098, ""optimizer"": ""adam"", ""weight_decay"": 0.0048696409415209}"
+8,PRUNED,0.5814536213874817,0.232326,"{""batch_size"": 128, ""lr"": 0.00015030900645056822, ""optimizer"": ""sgd"", ""weight_decay"": 2.67308831078167e-05}"

@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,42,42,official,val,0.9192546583850931
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,42,42,official,test,0.7147540983606557
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,43,42,official,val,0.9254658385093167
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,43,42,official,test,0.6819672131147541
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,44,42,official,val,0.8944099378881988
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,baseline,44,42,official,test,0.6737704918032786
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,42,42,official,val,0.9565217391304348
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,42,42,official,test,0.7
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,43,42,official,val,0.9440993788819876
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,43,42,official,test,0.7
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,44,42,official,val,0.9316770186335404
+mlp-medmnist-2026-08-23_17-28-52,mlp,medmnist,organmnist3d,screening,tuned,44,42,official,test,0.7180327868852459

@@ -10,3 +10,13 @@ search_space:
   batch_size: {type: categorical, choices: [32, 64, 128]}
   optimizer: {type: categorical, choices: [adam, adamw, sgd]}
   weight_decay: {type: float, low: 1e-6, high: 1e-2, log: true}
+
+# Métrica que a busca maximiza E que decide baseline-vs-tunada em
+# `rigorous_compare`. NÃO é a métrica de relatório: a coluna `acc` do export é
+# sempre acurácia simples (micro), em todo split. Ver `cvlab.metrics`.
+#
+# `accuracy` preserva o protocolo histórico. Use `balanced_accuracy` em datasets
+# desbalanceados (DermaMNIST tem razão 58,7): lá a acurácia simples é maximizada
+# ignorando as classes raras, e a escolha de config sairia guiada pela classe
+# majoritária. O valor vai ao manifest, então o relatório declara o critério.
+objective: accuracy

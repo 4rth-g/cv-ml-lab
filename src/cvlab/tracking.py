@@ -1,4 +1,10 @@
-"""Módulo de experiment tracking e testes estatísticos do cvlab."""
+"""Experiment tracking do cvlab: identidade do run, commit e registro em SQLite.
+
+O McNemar que morava aqui foi para ``analysis/R/stats.R`` (função
+``mcnemar_pair``), junto com o resto da inferência estatística. A paridade
+numérica está fixada em ``analysis/tests/testthat/test-parity.R``, com os
+mesmos casos que o antigo ``tests/test_mcnemar.py`` cobria.
+"""
 
 from __future__ import annotations
 
@@ -10,51 +16,23 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-from scipy.stats import binom, chi2
 
+def git_commit() -> str:
+    """Hash curto do HEAD, com sufixo ``-dirty`` se houver alteração não commitada.
 
-def mcnemar_test(
-    y_true: np.ndarray | list,
-    preds_a: np.ndarray | list,
-    preds_b: np.ndarray | list,
-) -> dict[str, Any]:
-    """McNemar pareado entre dois classificadores no MESMO conjunto de teste.
-
-    Semântica idêntica ao utilitário de referência (fashion-mnist-fundamentos-ia/src/utils.py).
-    Retorna {'n01', 'n10', 'statistic', 'p_value', 'method'}.
-    Usa binomial exata quando discordantes (n01+n10) < 25; senão chi2 com correção de continuidade.
+    Respeita ``CVLAB_GIT_SHA`` (CI). Compartilhado entre o tracker SQLite e o
+    ``manifest.json`` do export: os dois precisam apontar para o mesmo commit
+    para que um artefato seja rastreável até o código que o gerou.
     """
-    yt = np.asarray(y_true)
-    pa = np.asarray(preds_a)
-    pb = np.asarray(preds_b)
-
-    correct_a = yt == pa
-    correct_b = yt == pb
-
-    n01 = int(np.sum(~correct_a & correct_b))
-    n10 = int(np.sum(correct_a & ~correct_b))
-    disc = n01 + n10
-
-    if disc < 25:
-        method = "binom_exact"
-        statistic = float(min(n01, n10))
-        if disc == 0:
-            p_val = 1.0
-        else:
-            p_val = min(1.0, float(2 * binom.cdf(statistic, disc, 0.5)))
-    else:
-        method = "chi2_continuity"
-        statistic = float((abs(n01 - n10) - 1) ** 2 / disc)
-        p_val = float(chi2.sf(statistic, 1))
-
-    return {
-        "n01": n01,
-        "n10": n10,
-        "statistic": statistic,
-        "p_value": p_val,
-        "method": method,
-    }
+    commit_hash = os.environ.get("CVLAB_GIT_SHA")
+    if commit_hash:
+        return commit_hash
+    try:
+        sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+        dirty = subprocess.call(["git", "diff", "--quiet"]) != 0
+        return f"{sha}{'-dirty' if dirty else ''}"
+    except Exception:
+        return "unknown"
 
 
 def log_experiment(
@@ -76,14 +54,7 @@ def log_experiment(
 
     db_path.parent.mkdir(exist_ok=True, parents=True)
 
-    commit_hash = os.environ.get("CVLAB_GIT_SHA")
-    if not commit_hash:
-        try:
-            sha = subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
-            dirty = subprocess.call(["git", "diff", "--quiet"]) != 0
-            commit_hash = f"{sha}{'-dirty' if dirty else ''}"
-        except Exception:
-            commit_hash = "unknown"
+    commit_hash = git_commit()
 
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
@@ -113,7 +84,7 @@ def log_experiment(
     conn.close()
 
 
-def _config_group_choice(group: str, fallback_target: Any) -> str:
+def config_group_choice(group: str, fallback_target: Any) -> str:
     """Nome do grupo de config escolhido no Hydra (ex.: 'mlp', 'mnist').
 
     Usa o valor final resolvido, então respeita presets `+experiment=...`. Fora de
@@ -134,8 +105,8 @@ def run_name(cfg: Any) -> str:
     run no W&B e o arquivo de checkpoint, para que os dois sejam correlacionáveis
     a olho nu — dado um `.ckpt`, você acha o run no relatório, e vice-versa.
     """
-    model = _config_group_choice("model", cfg.model.get("_target_", "model"))
-    ds = _config_group_choice("dataset", cfg.dataset.get("_target_", "run"))
+    model = config_group_choice("model", cfg.model.get("_target_", "model"))
+    ds = config_group_choice("dataset", cfg.dataset.get("_target_", "run"))
     return f"{model}-{ds}-{datetime.now():%Y-%m-%d_%H-%M-%S}"
 
 

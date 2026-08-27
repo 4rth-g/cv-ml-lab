@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "run_id": "resnet-medmnist-2026-08-23_17-17-45",
+  "timestamp_utc": "2026-08-23T20:18:13.559919+00:00",
+  "commit": "ca7d1a7-dirty",
+  "model": "resnet",
+  "dataset": "medmnist",
+  "subset": "breastmnist",
+  "dataset_id": "medmnist-breastmnist-28",
+  "budget": "screening",
+  "n_seeds": 3,
+  "final_epochs": 8,
+  "variance": {
+    "vary_init": true,
+    "vary_data_order": false,
+    "vary_split": false,
+    "uses_official_split": true
+  },
+  "in_channels": 1,
+  "num_classes": 2,
+  "class_names": [
+    "malignant",
+    "normal, benign"
+  ],
+  "n_val": 78,
+  "n_test": 156,
+  "accelerator": "xpu",
+  "baseline_config": {
+    "_target_": "cvlab.models.resnet.ResNet",
+    "width": 64,
+    "blocks_per_stage": 2,
+    "n_stages": 3,
+    "lr": 0.01,
+    "batch_size": 128,
+    "optimizer": "sgd",
+    "weight_decay": 0.0005,
+    "scheduler": "none"
+  },
+  "tuned_config": {
+    "_target_": "cvlab.models.resnet.ResNet",
+    "width": 64,
+    "blocks_per_stage": 3,
+    "n_stages": 3,
+    "lr": 0.003939675937754723,
+    "batch_size": 64,
+    "optimizer": "sgd",
+    "weight_decay": 0.008105016126411584,
+    "scheduler": "cosine"
+  },
+  "objective": "balanced_accuracy",
+  "baseline_val_score_mean": 0.8124477861319966,
+  "best_val_score_mean": 0.814954051796157,
+  "study_name": "cvlab_optuna_medmnist-breastmnist-28_resnet",
+  "search_n_trials": 9,
+  "search_best_val_acc": 0.553884744644165,
+  "selected_arm": "tuned",
+  "selected_label": "melhor config (Optuna)",
+  "tuned_ge_baseline": true,
+  "mcnemar_baseline_seed": 43,
+  "mcnemar_tuned_seed": 43
+}

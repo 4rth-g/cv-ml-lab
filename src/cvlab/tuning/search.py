@@ -18,11 +18,36 @@ from optuna.samplers import TPESampler
 from torch.utils.data import DataLoader, Subset
 
 from cvlab.data.base import BaseImageClfDataModule
+from cvlab.metrics import objective_metric_key
 from cvlab.models.factory import baseline_params, build_model, lit_params, suggest_params
 from cvlab.models.lit_module import LitClassifier
+from cvlab.tuning.rigorous import objective_of
 from cvlab.xpu import build_trainer
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+
+def study_tag(datamodule: BaseImageClfDataModule, cfg: Any) -> str:
+    """Escopo do estudo Optuna: ``<dataset_id>_<modelo>``.
+
+    O ``dataset_id`` é a identidade canônica do dataset em todo o repo — nomeia o
+    diretório do EDA, entra no ``manifest.json`` e é a chave do join com as
+    predições. Usá-lo aqui faz o estudo ter exatamente o mesmo escopo que o resto
+    dos artefatos.
+
+    Isto já esteve errado. O nome vinha da CLASSE do datamodule
+    (``MedMNISTDataModule`` -> ``medmnist``), igual para os 18 subsets. Como o
+    estudo é aberto com ``load_if_exists=True`` e o orçamento restante é
+    ``n_trials - len(study.trials)``, o primeiro subset a rodar consumia os
+    trials e os seguintes PULAVAM a busca inteira, herdando a config tunada de
+    outro dataset sem nada indicar isso. Um grid de 12 runs em MedMNIST saiu com
+    ``search_best_val_acc`` idêntico nos três subsets.
+
+    Incluir a resolução (que o ``dataset_id`` do MedMNIST já traz) é deliberado:
+    uma busca feita em 28px não deve ser reaproveitada em 224px.
+    """
+    model_name = str(cfg.model.get("_target_", "model")).split(".")[-1].lower() or "model"
+    return f"{datamodule.dataset_id}_{model_name}"
 
 
 def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
@@ -72,9 +97,7 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
     output_dir = Path(cfg.get("output_dir", "results"))
     output_dir.mkdir(parents=True, exist_ok=True)
     # Escopa o estudo pelo dataset E pelo modelo p/ não colidir no mesmo output_dir
-    ds = str(cfg.dataset.get("_target_", "run")).split(".")[-1].replace("DataModule", "").lower() or "run"
-    model_name = str(cfg.model.get("_target_", "model")).split(".")[-1].lower() or "model"
-    tag = f"{ds}_{model_name}"
+    tag = study_tag(datamodule, cfg)
     db_path = output_dir / f"optuna_study_{tag}.db"
 
     study = optuna.create_study(
@@ -93,8 +116,15 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
 
     model_target = str(cfg.model.get("_target_"))
 
+    # A busca maximiza a MESMA métrica que a seleção final usa
+    # (`cfg.tuning.objective`). Antes o valor vinha de `val_acc` do torchmetrics,
+    # que é macro por default — a busca otimizava acurácia balanceada sem que
+    # nada na config dissesse isso. Ver `cvlab.metrics`.
+    search_objective = objective_of(cfg)
+    objective_key = objective_metric_key(search_objective, "val")
+
     def objective(trial: optuna.Trial) -> float:
-        """Treina uma configuração e devolve a melhor val_acc atingida (a maximizar)."""
+        """Treina uma configuração e devolve o melhor score de validação (a maximizar)."""
         params = suggest_params(trial, cfg.tuning.search_space)
 
         # Mesma seed em todo trial: fixa init dos pesos e ordem dos dados, então a
@@ -110,6 +140,11 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
         lit_module = LitClassifier(
             model=model,
             num_classes=datamodule.num_classes,
+            # Explícito, como em `rigorous._train_single_run`. `multilabel` não é
+            # dimensão de busca, então nunca aparece em `params`: sem esta linha
+            # a busca usaria CrossEntropy sobre alvo vetorial enquanto o
+            # multi-seed usaria BCE — dois treinos diferentes no mesmo run.
+            multilabel=bool(getattr(datamodule, "is_multilabel", False)),
             **lit_params(params),
         )
 
@@ -133,12 +168,12 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
             enable_progress_bar=False,
         )
 
-        best_val_acc = 0.0
+        best_score = 0.0
 
         class PyTorchLightningPruningCallback(L.Callback):
-            """Reporta val_acc por época ao Optuna e poda o trial se for ruim.
+            """Reporta o score de validação por época ao Optuna e poda o trial se for ruim.
 
-            A cada validação, informa a val_acc ao trial; o ``MedianPruner``
+            A cada validação, informa o score ao trial; o ``MedianPruner``
             aborta (``TrialPruned``) trials que ficam abaixo da mediana histórica
             no mesmo passo — evita gastar épocas numa configuração já perdedora.
             """
@@ -152,22 +187,28 @@ def optuna_search(datamodule: BaseImageClfDataModule, cfg: Any) -> optuna.Study:
                     return
 
                 epoch = trainer.current_epoch
-                val_acc = float(trainer.callback_metrics.get("val_acc", 0.0))
-                nonlocal best_val_acc
-                # Score do trial = melhor val_acc ao longo das épocas (não a última).
-                best_val_acc = max(best_val_acc, val_acc)
-                trial.report(val_acc, step=epoch)
+                score = float(trainer.callback_metrics.get(objective_key, 0.0))
+                nonlocal best_score
+                # Score do trial = melhor score ao longo das épocas (não a última).
+                best_score = max(best_score, score)
+                trial.report(score, step=epoch)
                 if trial.should_prune():
                     raise optuna.TrialPruned()
 
         trainer.callbacks.append(PyTorchLightningPruningCallback())
         trainer.fit(lit_module, train_dataloaders=train_dl, val_dataloaders=val_dl)
 
-        return best_val_acc
+        return best_score
 
     # remaining evita re-treinar trials já completos ao retomar um estudo salvo.
-
-    remaining = max(0, cfg.tuning.n_trials - len(study.trials))
+    #
+    # Conta só os trials que já GASTARAM orçamento. `enqueue_trial` acima cria um
+    # trial em estado WAITING, que entra em `study.trials` sem ter rodado nada:
+    # contá-lo fazia `remaining` sair 9 quando `n_trials` era 10, e todo estudo do
+    # repo terminava com um trial a menos que o configurado. O efeito era uniforme,
+    # então não invalidava comparação nenhuma, mas o orçamento não era o declarado.
+    spent = sum(1 for t in study.trials if t.state != optuna.trial.TrialState.WAITING)
+    remaining = max(0, cfg.tuning.n_trials - spent)
     if remaining > 0:
         study.optimize(objective, n_trials=remaining)
 

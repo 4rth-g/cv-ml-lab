@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,42,42,42,val,0.8346
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,42,42,42,test,0.8478
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,43,42,42,val,0.8338
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,43,42,42,test,0.8487
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,44,42,42,val,0.8351
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,baseline,44,42,42,test,0.8486
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,42,42,42,val,0.833
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,42,42,42,test,0.8486
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,43,42,42,val,0.8327
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,43,42,42,test,0.8486
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,44,42,42,val,0.8331
+perceptron-mnist-2026-08-23_15-24-30,perceptron,mnist,,screening,tuned,44,42,42,test,0.8496

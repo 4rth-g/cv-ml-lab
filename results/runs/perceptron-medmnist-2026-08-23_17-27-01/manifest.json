@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "run_id": "perceptron-medmnist-2026-08-23_17-27-01",
+  "timestamp_utc": "2026-08-23T20:28:37.402152+00:00",
+  "commit": "ca7d1a7-dirty",
+  "model": "perceptron",
+  "dataset": "medmnist",
+  "subset": "organmnist3d",
+  "dataset_id": "medmnist-organmnist3d-28",
+  "budget": "screening",
+  "n_seeds": 3,
+  "final_epochs": 8,
+  "variance": {
+    "vary_init": true,
+    "vary_data_order": false,
+    "vary_split": false,
+    "uses_official_split": true
+  },
+  "in_channels": 28,
+  "num_classes": 11,
+  "class_names": [
+    "liver",
+    "kidney-right",
+    "kidney-left",
+    "femur-right",
+    "femur-left",
+    "bladder",
+    "heart",
+    "lung-right",
+    "lung-left",
+    "spleen",
+    "pancreas"
+  ],
+  "n_val": 161,
+  "n_test": 610,
+  "accelerator": "xpu",
+  "baseline_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.001,
+    "batch_size": 64,
+    "optimizer": "adam",
+    "weight_decay": 1e-06
+  },
+  "tuned_config": {
+    "_target_": "cvlab.models.perceptron.LinearPerceptron",
+    "lr": 0.0005611516415334506,
+    "batch_size": 32,
+    "optimizer": "adam",
+    "weight_decay": 0.0029154431891537554
+  },
+  "objective": "accuracy",
+  "baseline_val_score_mean": 0.9544513457556937,
+  "best_val_score_mean": 0.9668737060041409,
+  "study_name": "cvlab_optuna_medmnist-organmnist3d-28_linearperceptron",
+  "search_n_trials": 9,
+  "search_best_val_acc": 0.9689440727233887,
+  "selected_arm": "tuned",
+  "selected_label": "melhor config (Optuna)",
+  "tuned_ge_baseline": true,
+  "mcnemar_baseline_seed": 42,
+  "mcnemar_tuned_seed": 43
+}

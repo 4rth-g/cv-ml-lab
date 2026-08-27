@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,42,42,official,val,0.7948717948717948
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,42,42,official,test,0.7564102564102564
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,43,42,official,val,0.8333333333333334
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,43,42,official,test,0.7692307692307693
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,44,42,official,val,0.8333333333333334
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,baseline,44,42,official,test,0.7628205128205128
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,42,42,official,val,0.7692307692307693
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,42,42,official,test,0.7051282051282052
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,43,42,official,val,0.8461538461538461
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,43,42,official,test,0.7884615384615384
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,44,42,official,val,0.7948717948717948
+perceptron-medmnist-2026-08-23_17-15-15,perceptron,medmnist,breastmnist,screening,tuned,44,42,official,test,0.7884615384615384

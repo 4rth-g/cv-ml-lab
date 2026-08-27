@@ -1,0 +1,17 @@
+# @package tuning
+# Orçamento de VARREDURA: existe por causa da combinatória.
+#
+# Com os 11 subsets do MedMNIST mais os 3 datasets torchvision, são 14 datasets
+# x 4 arquiteturas = 56 combinações, cada uma com busca Optuna e retreino
+# multi-seed. No orçamento `default` isso não termina em tempo útil.
+#
+# A ideia é usar este perfil para descobrir ONDE vale investir (que datasets
+# separam as arquiteturas, quais saturam), e só então rodar `default`/`long` nas
+# combinações escolhidas. Resultado de screening NÃO deve ser reportado como
+# resultado final: n_seeds=3 dá pouquíssimo poder, e o subconjunto de busca
+# torna a métrica da busca um proxy ainda mais grosseiro.
+n_trials: 10
+epochs_gs: 3
+gs_subset_size: 5000
+n_seeds: 3
+final_epochs: 8

@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,42,42,official,val,0.7228315054835494
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,42,42,official,test,0.7052369077306733
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,43,42,official,val,0.7068793619142573
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,43,42,official,test,0.7022443890274315
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,44,42,official,val,0.7068793619142573
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,baseline,44,42,official,test,0.7002493765586035
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,42,42,official,val,0.7387836490528414
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,42,42,official,test,0.7361596009975062
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,43,42,official,val,0.7437686939182453
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,43,42,official,test,0.7461346633416459
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,44,42,official,val,0.7337986041874377
+resnet-medmnist-2026-08-23_17-21-30,resnet,medmnist,dermamnist,screening,tuned,44,42,official,test,0.7336658354114713

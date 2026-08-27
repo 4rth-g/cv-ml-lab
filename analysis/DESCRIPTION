@@ -1,0 +1,38 @@
+Package: cvlabstats
+Title: Análise Estatística dos Experimentos do cv-ml-lab
+Version: 0.1.0
+Authors@R: person("Arthur", role = c("aut", "cre"), email = "grazziaarthur@gmail.com")
+Description: Camada de inferência estatística e relatório do cv-ml-lab. Lê os
+    artefatos tabulares que o pipeline Python exporta (results/runs/ e
+    results/datasets/) e produz testes pareados, correção para múltiplas
+    comparações, estimativas robustas, gráficos e o relatório final. Depende
+    APENAS do contrato de arquivos: nunca importa código Python nem lê imagens.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Depends:
+    R (>= 4.2)
+Imports:
+    rlang,
+    readr,
+    dplyr,
+    tidyr,
+    purrr,
+    jsonlite,
+    glue,
+    stats,
+    effectsize,
+    boot
+Suggests:
+    patchwork,
+    magick,
+    scales,
+    ggplot2,
+    scales,
+    PMCMRplus,
+    TOSTER,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

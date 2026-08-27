@@ -1,0 +1,17 @@
+run_id,timestamp_utc,commit,model,dataset,subset,budget,n_seeds,selected_arm,path
+perceptron-mnist-2026-08-23_15-24-30,2026-08-23T18:27:26.189220+00:00,ca7d1a7,perceptron,mnist,,screening,3,baseline,runs/perceptron-mnist-2026-08-23_15-24-30
+mlp-mnist-2026-08-23_15-27-50,2026-08-23T18:30:53.839992+00:00,ca7d1a7,mlp,mnist,,screening,3,baseline,runs/mlp-mnist-2026-08-23_15-27-50
+cnn-mnist-2026-08-23_15-31-20,2026-08-23T18:36:45.164119+00:00,ca7d1a7,cnn,mnist,,screening,3,tuned,runs/cnn-mnist-2026-08-23_15-31-20
+resnet-mnist-2026-08-23_15-37-53,2026-08-23T18:59:25.517002+00:00,ca7d1a7,resnet,mnist,,screening,3,tuned,runs/resnet-mnist-2026-08-23_15-37-53
+perceptron-medmnist-2026-08-23_17-15-15,2026-08-23T20:15:22.915647+00:00,ca7d1a7-dirty,perceptron,medmnist,breastmnist,screening,3,tuned,runs/perceptron-medmnist-2026-08-23_17-15-15
+mlp-medmnist-2026-08-23_17-15-37,2026-08-23T20:15:46.312316+00:00,ca7d1a7-dirty,mlp,medmnist,breastmnist,screening,3,tuned,runs/mlp-medmnist-2026-08-23_17-15-37
+cnn-medmnist-2026-08-23_17-16-01,2026-08-23T20:16:55.166313+00:00,ca7d1a7-dirty,cnn,medmnist,breastmnist,screening,3,tuned,runs/cnn-medmnist-2026-08-23_17-16-01
+resnet-medmnist-2026-08-23_17-17-45,2026-08-23T20:18:13.559919+00:00,ca7d1a7-dirty,resnet,medmnist,breastmnist,screening,3,tuned,runs/resnet-medmnist-2026-08-23_17-17-45
+perceptron-medmnist-2026-08-23_17-18-35,2026-08-23T20:19:06.805398+00:00,ca7d1a7-dirty,perceptron,medmnist,dermamnist,screening,3,baseline,runs/perceptron-medmnist-2026-08-23_17-18-35
+mlp-medmnist-2026-08-23_17-19-14,2026-08-23T20:19:47.390211+00:00,ca7d1a7-dirty,mlp,medmnist,dermamnist,screening,3,tuned,runs/mlp-medmnist-2026-08-23_17-19-14
+cnn-medmnist-2026-08-23_17-20-15,2026-08-23T20:21:01.866951+00:00,ca7d1a7-dirty,cnn,medmnist,dermamnist,screening,3,tuned,runs/cnn-medmnist-2026-08-23_17-20-15
+resnet-medmnist-2026-08-23_17-21-30,2026-08-23T20:26:02.987392+00:00,ca7d1a7-dirty,resnet,medmnist,dermamnist,screening,3,tuned,runs/resnet-medmnist-2026-08-23_17-21-30
+perceptron-medmnist-2026-08-23_17-27-01,2026-08-23T20:28:37.402152+00:00,ca7d1a7-dirty,perceptron,medmnist,organmnist3d,screening,3,tuned,runs/perceptron-medmnist-2026-08-23_17-27-01
+mlp-medmnist-2026-08-23_17-28-52,2026-08-23T20:30:09.903054+00:00,ca7d1a7-dirty,mlp,medmnist,organmnist3d,screening,3,tuned,runs/mlp-medmnist-2026-08-23_17-28-52
+cnn-medmnist-2026-08-23_17-30-30,2026-08-23T20:30:54.335812+00:00,ca7d1a7-dirty,cnn,medmnist,organmnist3d,screening,3,tuned,runs/cnn-medmnist-2026-08-23_17-30-30
+resnet-medmnist-2026-08-23_17-31-21,2026-08-23T20:32:33.391048+00:00,ca7d1a7-dirty,resnet,medmnist,organmnist3d,screening,3,tuned,runs/resnet-medmnist-2026-08-23_17-31-21

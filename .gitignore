@@ -3,9 +3,16 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Ccache / build outputs
+# Cache regenerável, tudo sob um teto só. Ruff, pytest e Hydra são apontados
+# para cá por configuração (pyproject.toml e configs/train.yaml); nenhum deles
+# precisa da raiz, era só o default. Uma entrada oculta em vez de quatro.
+/.cache/
+
+# Defaults antigos, mantidos para quem tem um clone anterior à mudança.
 .pytest_cache/
 .ruff_cache/
+/outputs/
+
 build/
 dist/
 *.egg-info/
@@ -21,19 +28,50 @@ venv/
 # diretório de mesmo nome em qualquer profundidade — foi assim que 'data/'
 # passou a ignorar o pacote src/cvlab/data/ inteiro.
 /data/
+# wandb agora vive em results/wandb (WANDB_DIR=results no justfile), coberto por /results/*
 /wandb/
-/outputs/
-/results/
+
+# results/: ignora o conteúdo, MENOS os artefatos leves que alimentam a análise
+# em R. São centenas de KB por run e é o que permite `just report` reproduzir as
+# tabelas a partir de um clone — sem eles, o relatório só existe em quem treinou.
+# Ignorar o diretório inteiro (`/results/`) não funcionaria: o git não permite
+# re-incluir arquivo cujo diretório pai está excluído.
+/results/*
+!/results/runs/
+!/results/datasets/
+
+# Os pesados continuam fora, inclusive dentro de results/runs/.
 *.db
 *.ckpt
 *.pth
 .hydra/
 
-# IDE
+# Material de estudo pessoal (não versionado por ora)
+/estudo/
+
+# IDE e ferramentas de sessão (configuração local, não do projeto)
 .idea/
 .vscode/
 .lsp/
+.claude/
 .DS_Store
+
+# Notebooks: o .ipynb e o .Rmd pareado SÃO versionados (o .ipynb com saídas, que
+# é o que o GitHub renderiza). Só o cache do Jupyter fica de fora.
+.ipynb_checkpoints/
+# criado pelo jupyter-lsp durante a sessão do JupyterLab
+.virtual_documents/
+
+# direnv (cache do devShell)
+# direnv: layout redirecionado para .cache/direnv no .envrc (direnv_layout_dir)
+/.direnv/
+
+# Relatório gerado pelo Quarto. O `quarto preview` renderiza AO LADO do .qmd,
+# não em output/, então o report.html solto também precisa entrar aqui.
+/analysis/output/
+/analysis/.quarto/
+/analysis/report.html
+/analysis/report_files/
 
 # MkDocs (site gerado)
 /site/

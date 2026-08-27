@@ -1,0 +1,13 @@
+run_id,model,dataset,subset,budget,arm,seed_init,seed_data,seed_split,split,acc
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,42,42,official,val,0.646061814556331
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,42,42,official,test,0.6399002493765586
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,43,42,official,val,0.646061814556331
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,43,42,official,test,0.6384039900249376
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,44,42,official,val,0.6490528414755733
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,baseline,44,42,official,test,0.6423940149625935
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,42,42,official,val,0.6520438683948155
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,42,42,official,test,0.6513715710723192
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,43,42,official,val,0.650049850448654
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,43,42,official,test,0.6488778054862843
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,44,42,official,val,0.6480558325024925
+perceptron-medmnist-2026-08-23_17-18-35,perceptron,medmnist,dermamnist,screening,tuned,44,42,official,test,0.6503740648379053

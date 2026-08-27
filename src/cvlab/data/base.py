@@ -54,6 +54,10 @@ class BaseImageClfDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.seed = seed
+        # Fontes de variância separadas (ver `configure_run_seeds`). Começam
+        # iguais a `seed`, que é o comportamento histórico.
+        self.split_seed = seed
+        self.data_seed = seed
         self.val_size = val_size if val_size is not None else self.default_val_size
         self.in_channels = in_channels if in_channels is not None else self.default_in_channels
         self.num_classes = num_classes if num_classes is not None else self.default_num_classes
@@ -64,6 +68,40 @@ class BaseImageClfDataModule(L.LightningDataModule):
         self.train_dataset: Dataset | None = None
         self.val_dataset: Dataset | None = None
         self.test_dataset: Dataset | None = None
+
+    #: ``True`` quando o dataset publica seu próprio split de validação, caso em
+    #: que `split_seed` não tem efeito (ver `cvlab.data.med_mnist`).
+    uses_official_split: ClassVar[bool] = False
+
+    @property
+    def dataset_id(self) -> str:
+        """Identificador do dataset nos artefatos exportados (ex.: ``mnist``).
+
+        Precisa vir de UM lugar só: `cvlab.export` grava este valor no manifest e
+        `cvlab.eda` o usa para nomear o diretório do EDA. Se cada lado derivasse
+        o nome por conta própria, os dois divergiriam e o join por
+        ``(split, example_idx)`` não encontraria o par — silenciosamente, porque
+        o diretório simplesmente não existiria.
+
+        Subclasses com variantes (resolução, subset) devem sobrescrever.
+        """
+        return type(self).__name__.removesuffix("DataModule").lower()
+
+    def configure_run_seeds(self, split_seed: int | None = None, data_seed: int | None = None) -> None:
+        """Ajusta as fontes de variância que NÃO são a inicialização dos pesos.
+
+        Separar isto de ``seed`` é o que permite medir a variância real de um
+        resultado. Um multi-seed que varia só a inicialização mantém split e
+        ordem de dados fixos e, por isso, **subestima** a variância — o intervalo
+        de confiança sai estreito demais (Bouthillier et al., MLSys 2021).
+
+        Chame ANTES de `setup` (o split) e antes de pedir o `train_dataloader`
+        (a ordem). Passar ``None`` preserva o valor atual.
+        """
+        if split_seed is not None:
+            self.split_seed = split_seed
+        if data_seed is not None:
+            self.data_seed = data_seed
 
     def _augment_ops(self) -> list:
         """Ops de data augmentation (aplicadas SÓ no treino). Sobrescreva por dataset.
@@ -140,7 +178,7 @@ class BaseImageClfDataModule(L.LightningDataModule):
         """Divide o dataset em treino (com augmentation) e validação (sem augmentation)."""
         n_total = len(full_aug_dataset)
         n_train = n_total - self.val_size
-        gen = torch.Generator().manual_seed(self.seed)
+        gen = torch.Generator().manual_seed(self.split_seed)
 
         train_split, val_split = random_split(full_aug_dataset, [n_train, self.val_size], generator=gen)
         # Validação usa exatamente os mesmos índices, mas do dataset sem augmentation
@@ -151,7 +189,7 @@ class BaseImageClfDataModule(L.LightningDataModule):
         self.test_dataset = test_ds
 
     def train_dataloader(self) -> DataLoader:
-        gen = torch.Generator().manual_seed(self.seed)
+        gen = torch.Generator().manual_seed(self.data_seed)
         return DataLoader(
             self._require_split("train"),
             batch_size=self.batch_size,

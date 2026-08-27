@@ -8,7 +8,7 @@ from typing import Any, Callable
 import lightning as L
 import torch
 from torch import nn, optim
-from torchmetrics.classification import MulticlassAccuracy
+from torchmetrics.classification import MulticlassAccuracy, MultilabelAccuracy
 
 #: Otimizadores disponíveis, por nome. Tabela declarativa em vez de if/elif: o
 #: nome é o que o Optuna sugere (`suggest_categorical` precisa de valores
@@ -50,6 +50,7 @@ class LitClassifier(L.LightningModule):
         optimizer: str = "adam",
         weight_decay: float = 0.0,
         scheduler: str = "none",
+        multilabel: bool = False,
     ) -> None:
         super().__init__()
         self.save_hyperparameters(ignore=["model"])
@@ -60,10 +61,34 @@ class LitClassifier(L.LightningModule):
         self.weight_decay = weight_decay
         self.scheduler_name = scheduler
 
-        self.criterion = nn.CrossEntropyLoss()
-        self.train_acc = MulticlassAccuracy(num_classes=num_classes)
-        self.val_acc = MulticlassAccuracy(num_classes=num_classes)
-        self.test_acc = MulticlassAccuracy(num_classes=num_classes)
+        # Multi-label não é multiclasse com mais saídas: os rótulos coexistem,
+        # então cada saída é uma decisão binária independente. Softmax faria as
+        # classes competirem entre si, o que é errado quando uma radiografia tem
+        # dois achados ao mesmo tempo.
+        self.multilabel = multilabel
+        if multilabel:
+            self.criterion: nn.Module = nn.BCEWithLogitsLoss()
+            make_metric = lambda avg: MultilabelAccuracy(num_labels=num_classes, average=avg)  # noqa: E731
+        else:
+            self.criterion = nn.CrossEntropyLoss()
+            make_metric = lambda avg: MulticlassAccuracy(num_classes=num_classes, average=avg)  # noqa: E731
+
+        # `average` EXPLÍCITO, e duas métricas em vez de uma. O default de
+        # `average` nas classes de torchmetrics é "macro" (herdado de
+        # `*StatScores`), então `MulticlassAccuracy(num_classes=N)` logava
+        # acurácia BALANCEADA sob o nome `val_acc` enquanto a acurácia de teste
+        # era calculada como micro — duas quantidades diferentes na mesma coluna
+        # `acc` do export. Ver `cvlab.metrics`.
+        #
+        # `_acc` é micro (o que se reporta); `_bal_acc` é macro (o que pode
+        # decidir, quando `tuning.objective=balanced_accuracy`). Manter as duas
+        # logadas é o que permite ao early stopping escolher a época pelo mesmo
+        # critério que escolhe a config, sem que o relatório mude de métrica.
+        self.train_acc = make_metric("micro")
+        self.val_acc = make_metric("micro")
+        self.test_acc = make_metric("micro")
+        self.val_bal_acc = make_metric("macro")
+        self.test_bal_acc = make_metric("macro")
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
@@ -82,16 +107,20 @@ class LitClassifier(L.LightningModule):
         logits = self(x)
         loss = self.criterion(logits, y)
         acc = self.val_acc(logits, y)
+        bal_acc = self.val_bal_acc(logits, y)
         self.log("val_loss", loss, on_step=False, on_epoch=True, prog_bar=True)
         self.log("val_acc", acc, on_step=False, on_epoch=True, prog_bar=True)
+        self.log("val_bal_acc", bal_acc, on_step=False, on_epoch=True)
 
     def test_step(self, batch: tuple[torch.Tensor, torch.Tensor], batch_idx: int) -> None:
         x, y = batch
         logits = self(x)
         loss = self.criterion(logits, y)
         acc = self.test_acc(logits, y)
+        bal_acc = self.test_bal_acc(logits, y)
         self.log("test_loss", loss, on_step=False, on_epoch=True)
         self.log("test_acc", acc, on_step=False, on_epoch=True)
+        self.log("test_bal_acc", bal_acc, on_step=False, on_epoch=True)
 
     def configure_optimizers(self) -> Any:
         """Monta otimizador e (opcionalmente) scheduler a partir dos nomes configurados."""
