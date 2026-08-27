@@ -3,4 +3,11 @@ project: cv-ml-lab
 mode: offline
 entity: grazziaarthur-universidade-federal-de-sergipe
 name: null  # null = auto (nome do dataset + timestamp); sobrescreva com logger.name=meu-run
-save_dir: ${paths.root_dir}
+# O W&B cria `<save_dir>/wandb/`. Apontando para `output_dir`, os runs offline
+# ficam em `results/wandb/`, junto do resto dos artefatos de execução, em vez de
+# um `wandb/` na raiz do repositório.
+#
+# Tem de ser AQUI e não na variável de ambiente `WANDB_DIR`: o `save_dir` do
+# WandbLogger é passado explicitamente e vence o env var, então mexer só no
+# justfile não surte efeito nenhum.
+save_dir: ${output_dir}

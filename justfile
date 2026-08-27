@@ -274,7 +274,7 @@ docs-serve:
 
 # Envia ao W&B os runs registrados offline
 sync:
-    uvx wandb sync wandb/offline-run-*
+    uvx wandb sync results/wandb/offline-run-*
 
 # Remove caches e os resultados descartáveis do smoke
 clean:
