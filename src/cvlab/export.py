@@ -293,6 +293,13 @@ def export_run_artifacts(
         "objective": res.get("objective", "accuracy"),
         "baseline_val_score_mean": res.get("baseline_val_score_mean"),
         "best_val_score_mean": res.get("best_val_score_mean"),
+        # De qual estudo Optuna veio a config tunada, e quantos trials ele tinha.
+        # Sem isto, um estudo compartilhado por engano entre datasets é invisível:
+        # foi assim que três subsets do MedMNIST reportaram o mesmo
+        # `search_best_val_acc` sem nada no artefato denunciar. Com o nome
+        # gravado, `study_name` diferente de `dataset_id` salta aos olhos.
+        "study_name": getattr(study, "study_name", None) if study is not None else None,
+        "search_n_trials": len(study.trials) if study is not None else None,
         "search_best_val_acc": float(study.best_value) if study is not None else None,
         "selected_arm": res["selected_arm"],
         "selected_label": res["selected_name"],
